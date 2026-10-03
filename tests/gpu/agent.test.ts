@@ -50,6 +50,26 @@ function firstRand(state: number): number {
   return (x >>> 8) / 16777216;
 }
 
+// The nth (0-based) draw of the shader's rand() from the given state.
+function nthRand(state: number, n: number): number {
+  let x = state >>> 0;
+  let r = 0;
+  for (let i = 0; i <= n; i++) {
+    x = (x ^ (x << 13)) >>> 0;
+    x = (x ^ (x >>> 17)) >>> 0;
+    x = (x ^ (x << 5)) >>> 0;
+    r = (x >>> 8) / 16777216;
+  }
+  return r;
+}
+
+// An rng seed whose first draw selects a parent slot other than 0.
+function seedPickingOtherParent(pool: number): number {
+  let seed = 1;
+  while (Math.floor(firstRand(seed) * pool) % pool === 0) seed++;
+  return seed;
+}
+
 describe('AgentPass movement and bounds', () => {
   it('moves along its direction and ages by one', async () => {
     const { actors, counters } = await runAgent([actor({ x: 10, y: 10, speed: 1 })], { directionMomentum: 1, maxSpeed: 1 });
@@ -88,13 +108,18 @@ describe('AgentPass death and respawn', () => {
   });
 
   it('respawns at a random position with its own color when always_spawn_from_parent = 0', async () => {
-    const { actors } = await runAgent([actor({ age: 9, life: 5, speed: 2 })], { alwaysSpawnFromParent: 0, spawnRandomOffset: 0, minSpeed: 0.3, maxSpeed: 0.3 });
+    const rng = 4242;
+    const { actors } = await runAgent([actor({ x: 10, y: 10, age: 9, life: 5, speed: 2, rng })],
+      { alwaysSpawnFromParent: 0, spawnRandomOffset: 0, minSpeed: 0.3, maxSpeed: 5 });
     const a = actors[0];
     expect(a.alive).toBe(true);
     expect(a.age).toBe(1);
-    expect(a.speed).toBeCloseTo(0.3, 5);
-    expect(a.x).toBeGreaterThanOrEqual(0);
-    expect(a.x).toBeLessThan(W);
+    // Reset to minSpeed, then nudged by at most 0.01 (not carried over from the old speed of 2).
+    expect(a.speed).toBeGreaterThanOrEqual(0.3);
+    expect(a.speed).toBeLessThanOrEqual(0.31);
+    // Position draws are x then y.
+    expect(a.x).toBeCloseTo(nthRand(rng, 0) * W, 3);
+    expect(a.y).toBeCloseTo(nthRand(rng, 1) * W, 3);
     expect(a.seed.slice(0, 3)).toEqual([1, 0, 0]);
   });
 
@@ -115,6 +140,34 @@ describe('AgentPass death and respawn', () => {
     expect(out[0].dir).toBeCloseTo(1, 4);
     expect(out[0].seed[1]).toBeCloseTo(1, 4);
     expect(out[0].seed[0]).toBeCloseTo(0, 4);
+  });
+
+  it('offsets a parent respawn perpendicular to the parent direction by spawnRandomOffset', async () => {
+    const pool = 64;
+    const rng = seedPickingOtherParent(pool);
+    const actors = [
+      actor({ x: 5, y: 5, age: 9, life: 5, rng }),
+      ...Array.from({ length: pool - 1 }, () => actor({ x: 50, y: 50, dir: 0 })),
+    ];
+    const { actors: out } = await runAgent(actors, { alwaysSpawnFromParent: 1, spawnRandomOffset: 2, directionMomentum: 1 });
+    expect(out[0].x).toBeCloseTo(50, 3);
+    expect(Math.abs(out[0].y - 50)).toBeCloseTo(2, 3);
+  });
+
+  it('falls back to a random position with its own color when the chosen parent is dead', async () => {
+    const pool = 64;
+    const actors = [
+      actor({ x: 5, y: 5, age: 9, life: 5, rng: seedPickingOtherParent(pool) }),
+      ...Array.from({ length: pool - 1 }, () => actor({ alive: false, x: 50, y: 50, seed: [0, 1, 0, 1], color: [0, 1, 0, 1] })),
+    ];
+    const { actors: out } = await runAgent(actors, { alwaysSpawnFromParent: 1, spawnRandomOffset: 0 });
+    expect(out[0].alive).toBe(true);
+    expect(out[0].age).toBe(1);
+    expect(out[0].seed.slice(0, 3)).toEqual([1, 0, 0]);
+    expect(out[0].x).toBeGreaterThanOrEqual(0);
+    expect(out[0].x).toBeLessThan(W);
+    expect(out[0].y).toBeGreaterThanOrEqual(0);
+    expect(out[0].y).toBeLessThan(W);
   });
 
   it('dies of exhaustion on food with alpha >= food_exhaustion, not below', async () => {
