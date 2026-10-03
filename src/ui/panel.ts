@@ -1,5 +1,5 @@
 import GUI from 'lil-gui';
-import type { AppSettings } from '../app/settings';
+import { LIFE_SIZES, type AppSettings } from '../app/settings';
 import type { PhysarumParams } from '../physarum/params';
 
 export interface PanelActions {
@@ -11,6 +11,7 @@ export interface PanelActions {
   clearFood(): void;
   clearActors(): void;
   poolSizeChanged(poolSize: number): void;
+  lifeSizeChanged(lifeSize: number): void;
   seedChanged(seed: number): void;
 }
 
@@ -31,6 +32,8 @@ export function buildPanel(settings: AppSettings, params: PhysarumParams, poolSi
   life.add(actions, 'randomFill').name('random fill');
   life.add(settings, 'randomDensity', 0, 1, 0.01).name('density');
   life.add(settings, 'lifeHz', 0.25, 8, 0.25).name('tick rate (Hz)');
+  const boardSize = life.add(settings, 'lifeSize', LIFE_SIZES).name('board size').onChange(actions.lifeSizeChanged);
+  boardSize.domElement.dataset.testid = 'board-size';
 
   const bridge = gui.addFolder('Bridge');
   bridge.add(settings, 'actorsPerBirth', 0, 256, 1);

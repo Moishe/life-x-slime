@@ -26,7 +26,6 @@ const MAX_SPAWNS_PER_STEP = 65536;
 // "One Physarum step" for the pass order.
 export class PhysarumSim {
   params: PhysarumParams = { ...DEFAULT_PARAMS };
-  readonly maxFoodSeedsPerStep: number;
 
   private readonly agentPass: AgentPass;
   private readonly injectPass: InjectPass;
@@ -41,7 +40,7 @@ export class PhysarumSim {
   private actors!: GPUBuffer;
   private children!: GPUBuffer;
   private spawns!: GPUBuffer;
-  private readonly foodSeeds: GPUBuffer;
+  private foodSeeds!: GPUBuffer;
   private readonly counters: GPUBuffer;
   private readonly countersStaging: GPUBuffer;
   private readonly simParams: GPUBuffer;
@@ -50,6 +49,7 @@ export class PhysarumSim {
   private readonly foodParams: GPUBuffer;
 
   private poolSizeValue = 0;
+  private cellSize = 0;
   private stepIndex = 0;
   private readPending = false;
 
@@ -57,7 +57,7 @@ export class PhysarumSim {
     private readonly device: GPUDevice,
     private readonly opts: SimOptions,
   ) {
-    const { width, height, cellSize } = opts;
+    const { width, height } = opts;
     this.agentPass = new AgentPass(device);
     this.injectPass = new InjectPass(device);
     this.diffusePass = new DiffusePass(device);
@@ -68,8 +68,6 @@ export class PhysarumSim {
     this.trailB = createFieldTexture(device, width, height, 'trail B');
     this.food = createFieldTexture(device, width, height, 'food');
 
-    this.maxFoodSeedsPerStep = (width / cellSize) * (height / cellSize);
-    this.foodSeeds = createStorageBuffer(device, this.maxFoodSeedsPerStep * FOOD_SEED_BYTES, 'food seeds');
     this.counters = createCountersBuffer(device);
     this.countersStaging = device.createBuffer({
       label: 'counters staging',
@@ -83,10 +81,16 @@ export class PhysarumSim {
 
     this.clearTrail();
     this.allocatePool(opts.poolSize);
+    this.setCellSize(opts.cellSize);
   }
 
   get poolSize(): number {
     return this.poolSizeValue;
+  }
+
+  // One food seed per Life cell, so a tick's deaths always fit in one step.
+  get maxFoodSeedsPerStep(): number {
+    return (this.opts.width / this.cellSize) * (this.opts.height / this.cellSize);
   }
 
   get maxChildren(): number {
@@ -115,7 +119,8 @@ export class PhysarumSim {
       throw new Error(`step() got ${seeds.length} food seeds; max is ${this.maxFoodSeedsPerStep}`);
     }
     const { device, params: p } = this;
-    const { width, height, cellSize } = this.opts;
+    const { width, height } = this.opts;
+    const { cellSize } = this;
     const queue = device.queue;
 
     queue.writeBuffer(this.simParams, 0, packSimParams(p, {
@@ -159,6 +164,15 @@ export class PhysarumSim {
     queue.submit([encoder.finish()]);
     if (diffuse) [this.trailA, this.trailB] = [this.trailB, this.trailA];
     this.stepIndex++;
+  }
+
+  // Follows a Life board size change: resizes the food seed buffer and clears
+  // the food map, which is laid out in the old cell blocks.
+  setCellSize(cellSize: number): void {
+    this.cellSize = cellSize;
+    this.foodSeeds?.destroy();
+    this.foodSeeds = createStorageBuffer(this.device, this.maxFoodSeedsPerStep * FOOD_SEED_BYTES, 'food seeds');
+    this.clearFood();
   }
 
   setPoolSize(poolSize: number): void {

@@ -1,6 +1,6 @@
 import './style.css';
 import { App } from './app/app';
-import { LIFE_SIZE, seedFromUrl } from './app/settings';
+import { DEFAULT_SETTINGS, seedFromUrl, sizeFromUrl } from './app/settings';
 import { initGpu } from './gpu/device';
 import { onShaderError } from './gpu/shader';
 import type { Cell } from './life/engine';
@@ -49,6 +49,7 @@ function attachUi(app: App, poolSizes: number[]): void {
     clearFood: () => app.sim.clearFood(),
     clearActors: () => app.clearActors(),
     poolSizeChanged: n => app.setPoolSize(n),
+    lifeSizeChanged: n => app.setLifeSize(n),
     seedChanged: seed => app.reseed(seed),
   });
 
@@ -57,7 +58,7 @@ function attachUi(app: App, poolSizes: number[]): void {
   let hover: Cell | null = null;
   const refreshGhost = () => {
     const pattern = tool.kind === 'pattern' ? tool.pattern : null;
-    app.setGhost(hover ? ghostCells(pattern, quarterTurns, hover, LIFE_SIZE) : []);
+    app.setGhost(hover ? ghostCells(pattern, quarterTurns, hover, app.settings.lifeSize) : []);
   };
 
   buildPatternBar(document.querySelector<HTMLElement>('#patterns')!, selected => {
@@ -67,7 +68,7 @@ function attachUi(app: App, poolSizes: number[]): void {
   });
 
   canvas.addEventListener('pointermove', e => {
-    hover = cellFromPointer(e.clientX, e.clientY, canvas.getBoundingClientRect(), LIFE_SIZE);
+    hover = cellFromPointer(e.clientX, e.clientY, canvas.getBoundingClientRect(), app.settings.lifeSize);
     refreshGhost();
   });
   canvas.addEventListener('pointerleave', () => {
@@ -75,7 +76,7 @@ function attachUi(app: App, poolSizes: number[]): void {
     refreshGhost();
   });
   canvas.addEventListener('click', e => {
-    const cell = cellFromPointer(e.clientX, e.clientY, canvas.getBoundingClientRect(), LIFE_SIZE);
+    const cell = cellFromPointer(e.clientX, e.clientY, canvas.getBoundingClientRect(), app.settings.lifeSize);
     if (!cell) return;
     const current = tool;
     app.editWorld(w => {
@@ -136,7 +137,11 @@ async function start(): Promise<void> {
   context.configure({ device, format, alphaMode: 'opaque' });
   fitCanvas();
 
-  const app = new App(device, context, format, seedFromUrl(location.search, DEFAULT_PARAMS.rngSeed));
+  const app = new App(
+    device, context, format,
+    seedFromUrl(location.search, DEFAULT_PARAMS.rngSeed),
+    sizeFromUrl(location.search, DEFAULT_SETTINGS.lifeSize),
+  );
   attachUi(app, gpu.poolSizes);
 
   let last = performance.now();

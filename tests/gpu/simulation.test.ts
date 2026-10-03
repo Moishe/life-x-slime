@@ -68,6 +68,28 @@ describe('PhysarumSim', () => {
     expect(Math.abs(p[3] - 128)).toBeLessThanOrEqual(1);
   });
 
+  it('setCellSize makes death food cover the smaller block and raises the seed limit', async () => {
+    const sim = await makeSim();
+    expect(sim.maxFoodSeedsPerStep).toBe(16);
+    sim.setCellSize(4);
+    expect(sim.maxFoodSeedsPerStep).toBe(256);
+    sim.step([], [{ cellX: 1, cellY: 2, rgb: [1, 0, 0] }]);
+    const out = await readTexture(await getDevice(), sim.foodTexture, W, W);
+    expect(Math.abs(pixel(out, W, 4, 8)[0] - 128)).toBeLessThanOrEqual(1);
+    expect(Math.abs(pixel(out, W, 7, 11)[0] - 128)).toBeLessThanOrEqual(1);
+    expect(pixel(out, W, 8, 8)).toEqual([0, 0, 0, 0]);
+    expect(pixel(out, W, 4, 12)).toEqual([0, 0, 0, 0]);
+    expect(() => sim.step([], Array.from({ length: 256 }, (_, i) => ({ cellX: i % 16, cellY: Math.floor(i / 16), rgb: [0, 1, 0] as [number, number, number] })))).not.toThrow();
+  });
+
+  it('setCellSize clears the food map, which is laid out in the old blocks', async () => {
+    const sim = await makeSim();
+    sim.step([], [{ cellX: 0, cellY: 0, rgb: [1, 0, 0] }]);
+    sim.setCellSize(8);
+    const out = await readTexture(await getDevice(), sim.foodTexture, W, W);
+    expect(pixel(out, W, 3, 3)).toEqual([0, 0, 0, 0]);
+  });
+
   it('setPoolSize clears actors and resets every counter', async () => {
     const sim = await makeSim(256);
     sim.params.spawnProbability = 1;

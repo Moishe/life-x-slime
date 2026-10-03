@@ -1,6 +1,6 @@
 import { FixedStepClock } from './clock';
 import { RateMeter } from './rates';
-import { CELL_SIZE, DEFAULT_SETTINGS, FIELD_SIZE, LIFE_SIZE, PHYSARUM_HZ, type AppSettings } from './settings';
+import { DEFAULT_SETTINGS, FIELD_SIZE, PHYSARUM_HZ, cellSizeFor, type AppSettings } from './settings';
 import { SpawnScheduler, birthsToActors, deathsToFoodSeeds } from '../bridge/spawner';
 import type { Cell } from '../life/engine';
 import { LifeWorld } from '../life/world';
@@ -13,7 +13,7 @@ import { mulberry32, type Rng } from '../rng';
 // Owns the simulations and clocks, and draws each frame.
 export class App {
   readonly settings: AppSettings = { ...DEFAULT_SETTINGS };
-  readonly world: LifeWorld;
+  world: LifeWorld;
   readonly sim: PhysarumSim;
   readonly stats = {
     frames: new RateMeter(),
@@ -41,13 +41,17 @@ export class App {
     private readonly context: GPUCanvasContext,
     format: GPUTextureFormat,
     seed: number,
+    lifeSize: number,
   ) {
     this.seededRng = mulberry32(seed);
-    this.world = new LifeWorld(LIFE_SIZE, LIFE_SIZE, this.rng);
-    this.sim = new PhysarumSim(device, { width: FIELD_SIZE, height: FIELD_SIZE, poolSize: this.settings.poolSize, cellSize: CELL_SIZE });
+    this.settings.lifeSize = lifeSize;
+    this.world = new LifeWorld(lifeSize, lifeSize, this.rng);
+    this.sim = new PhysarumSim(device, {
+      width: FIELD_SIZE, height: FIELD_SIZE, poolSize: this.settings.poolSize, cellSize: cellSizeFor(lifeSize),
+    });
     this.sim.params.rngSeed = seed;
     this.scheduler = new SpawnScheduler(this.settings.poolSize);
-    this.compositor = new Compositor(device, format, LIFE_SIZE);
+    this.compositor = new Compositor(device, format, lifeSize);
   }
 
   frame(dtMs: number): void {
@@ -67,7 +71,7 @@ export class App {
     const result = this.world.tick();
     const actors = birthsToActors(
       result.births,
-      { actorsPerBirth: this.settings.actorsPerBirth, cellSize: CELL_SIZE, minSpeed: this.sim.params.minSpeed, life: this.sim.params.life },
+      { actorsPerBirth: this.settings.actorsPerBirth, cellSize: cellSizeFor(this.settings.lifeSize), minSpeed: this.sim.params.minSpeed, life: this.sim.params.life },
       this.rng,
       this.settings.poolSize,
     );
@@ -83,6 +87,19 @@ export class App {
 
   setGhost(cells: Cell[]): void {
     this.ghost = cells;
+    this.ghostDirty = true;
+  }
+
+  // Starts an empty board at the new size. The food map and pending food are
+  // cleared because they are laid out in the old cell blocks; actors and trail stay.
+  setLifeSize(lifeSize: number): void {
+    this.settings.lifeSize = lifeSize;
+    this.world = new LifeWorld(lifeSize, lifeSize, this.rng);
+    this.sim.setCellSize(cellSizeFor(lifeSize));
+    this.pendingSeeds = [];
+    this.compositor.setGridSize(lifeSize);
+    this.ghost = [];
+    this.lifeDirty = true;
     this.ghostDirty = true;
   }
 
@@ -124,11 +141,11 @@ export class App {
 
   private render(): void {
     if (this.lifeDirty) {
-      this.compositor.setLife(lifeTexels(this.world.liveCells(), LIFE_SIZE));
+      this.compositor.setLife(lifeTexels(this.world.liveCells(), this.settings.lifeSize));
       this.lifeDirty = false;
     }
     if (this.ghostDirty) {
-      this.compositor.setGhost(ghostTexels(this.ghost, LIFE_SIZE));
+      this.compositor.setGhost(ghostTexels(this.ghost, this.settings.lifeSize));
       this.ghostDirty = false;
     }
     const field = this.settings.foodView ? this.sim.foodTexture : this.sim.trail;

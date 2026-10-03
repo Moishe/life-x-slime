@@ -6,8 +6,8 @@ export class Compositor {
   private pipeline: GPURenderPipeline;
   private sampler: GPUSampler;
   private params: GPUBuffer;
-  private lifeTexture: GPUTexture;
-  private ghostTexture: GPUTexture;
+  private lifeTexture!: GPUTexture;
+  private ghostTexture!: GPUTexture;
 
   constructor(
     private device: GPUDevice,
@@ -23,8 +23,16 @@ export class Compositor {
     });
     this.sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
     this.params = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.setGridSize(gridSize);
+  }
+
+  // Recreates the per-cell textures (both start transparent) for a new Life board size.
+  setGridSize(gridSize: number): void {
+    this.gridSize = gridSize;
+    this.lifeTexture?.destroy();
+    this.ghostTexture?.destroy();
     const cellTexture = (label: string) =>
-      device.createTexture({
+      this.device.createTexture({
         label,
         size: [gridSize, gridSize],
         format: 'rgba8unorm',

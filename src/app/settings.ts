@@ -1,9 +1,9 @@
 import type { SpawnMode } from '../bridge/spawner';
 import { DEFAULT_POOL_SIZE } from '../physarum/params';
 
-export const LIFE_SIZE = 128;
 export const FIELD_SIZE = 2048;
-export const CELL_SIZE = FIELD_SIZE / LIFE_SIZE;
+// Life board sizes; each divides the field into whole square pixel blocks.
+export const LIFE_SIZES: readonly number[] = [64, 128, 256, 512, 1024];
 export const PHYSARUM_HZ = 30;
 
 export interface AppSettings {
@@ -16,6 +16,7 @@ export interface AppSettings {
   physarumOpacity: number;
   foodView: boolean;
   poolSize: number;
+  lifeSize: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -28,11 +29,23 @@ export const DEFAULT_SETTINGS: AppSettings = {
   physarumOpacity: 1,
   foodView: false,
   poolSize: DEFAULT_POOL_SIZE,
+  lifeSize: 512,
 };
+
+// Width of one Life cell's block on the Physarum field, in field pixels.
+export function cellSizeFor(lifeSize: number): number {
+  return FIELD_SIZE / lifeSize;
+}
 
 // The integer ?seed=N URL parameter, if present.
 export function seedFromUrl(search: string, fallback: number): number {
   const value = new URLSearchParams(search).get('seed');
   const n = value === null ? NaN : Number(value);
   return Number.isInteger(n) ? n : fallback;
+}
+
+// The ?size=N URL parameter, if it names a supported Life board size.
+export function sizeFromUrl(search: string, fallback: number): number {
+  const n = Number(new URLSearchParams(search).get('size'));
+  return LIFE_SIZES.includes(n) ? n : fallback;
 }

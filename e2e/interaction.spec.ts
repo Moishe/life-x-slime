@@ -3,21 +3,25 @@ import { PNG } from 'pngjs';
 
 const PALETTE_HUES = [0, 45, 90, 135, 180, 225, 270, 315];
 
-async function boot(page: Page): Promise<void> {
-  await page.goto('/?seed=7');
+// Life board size the cell helpers map to; boot() sets it.
+let grid = 128;
+
+async function boot(page: Page, size = 128): Promise<void> {
+  grid = size;
+  await page.goto(`/?seed=7&size=${size}`);
   await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
   await page.getByRole('button', { name: 'play / pause' }).click(); // starts playing; pause it
 }
 
 async function clickCell(page: Page, x: number, y: number): Promise<void> {
   const box = (await page.locator('#field').boundingBox())!;
-  const s = box.width / 128;
+  const s = box.width / grid;
   await page.mouse.click(box.x + (x + 0.5) * s, box.y + (y + 0.5) * s);
 }
 
 async function cellPixel(page: Page, x: number, y: number): Promise<[number, number, number]> {
   const shot = PNG.sync.read(await page.locator('#field').screenshot());
-  const s = shot.width / 128;
+  const s = shot.width / grid;
   const o = (Math.floor((y + 0.5) * s) * shot.width + Math.floor((x + 0.5) * s)) * 4;
   return [shot.data[o], shot.data[o + 1], shot.data[o + 2]];
 }
@@ -83,7 +87,7 @@ const isGhostTinted = ([r, , b]: [number, number, number]) => b > 100 && b > r +
 
 async function hoverCell(page: Page, x: number, y: number): Promise<void> {
   const box = (await page.locator('#field').boundingBox())!;
-  const s = box.width / 128;
+  const s = box.width / grid;
   await page.mouse.move(box.x + (x + 0.5) * s, box.y + (y + 0.5) * s);
 }
 
@@ -130,4 +134,33 @@ test('hotkeys are ignored while typing in a panel input', async ({ page }) => {
   await page.locator('body').click({ position: { x: 5, y: 5 } }); // move focus off the input
   await page.keyboard.press('t');
   await expect(foodView).toBeChecked();
+});
+
+test('changing the board size clears the board and rescales placement', async ({ page }) => {
+  await boot(page, 128);
+  await page.getByRole('button', { name: 'Glider', exact: true }).click();
+  await clickCell(page, 60, 60);
+  await expect(page.getByTestId('readout-organisms')).toHaveText('1');
+  await page.getByTestId('board-size').locator('select').selectOption({ label: '256' });
+  await expect(page.getByTestId('readout-organisms')).toHaveText('0');
+  grid = 256;
+  await clickCell(page, 120, 120); // glider cells (121,120) (122,121) (120,122) (121,122) (122,122)
+  await expect(page.getByTestId('readout-organisms')).toHaveText('1');
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(200);
+  expect(Math.max(...(await cellPixel(page, 121, 120)))).toBeGreaterThan(100);
+  expect(Math.max(...(await cellPixel(page, 121, 121)))).toBeLessThan(40);
+});
+
+test('starts at 512x512 and keeps running with a randomly filled board', async ({ page }) => {
+  await page.goto('/?seed=7');
+  await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+  await expect(page.getByTestId('board-size').locator('select')).toHaveValue(/./);
+  expect(await page.getByTestId('board-size').locator('select option:checked').textContent()).toBe('512');
+  await page.getByRole('button', { name: 'random fill' }).click();
+  await expect.poll(async () => Number(await page.getByTestId('readout-organisms').textContent())).toBeGreaterThan(100);
+  await page.waitForTimeout(3000);
+  expect(Number(await page.getByTestId('readout-fps').textContent())).toBeGreaterThan(10);
+  expect(Number(await page.getByTestId('readout-steps').textContent())).toBeGreaterThan(10);
+  await expect.poll(alive(page), { timeout: 5000 }).toBeGreaterThan(0);
 });
