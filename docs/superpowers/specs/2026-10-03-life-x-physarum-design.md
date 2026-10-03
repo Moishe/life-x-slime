@@ -162,7 +162,7 @@ Actors enter the pool three ways, all through the ring head:
 
 1. **Life births** (bridge, above).
 2. **Reproduction.** Each step, each alive actor emits a child with probability `spawnProbability`. The child: position = parent position offset perpendicular to the parent's direction by a random amount in [-`spawnRandomOffset`, +`spawnRandomOffset`]; direction = parent direction + uniform random in [-`directionVariance`, +`directionVariance`]; speed = parent speed × uniform random in [1-`speedVariance`, 1+`speedVariance`] (clamped to [`minSpeed`, `maxSpeed`]); seed color and deposit color copied from parent; age 0; life from `life`.
-3. **Respawn on death,** in the actor's own slot, per `always_spawn_from_parent`: > 0 respawn at its own position offset perpendicular by `spawnRandomOffset`; = 0 respawn at a uniformly random field position; < 0 no respawn (slot becomes not alive). Respawn color is the parent's seed color (passed through `dominant_color` when `lock_to_hsv_angles` ≠ 0). Speed resets to `minSpeed`.
+3. **Respawn on death,** in the actor's own slot, per `always_spawn_from_parent` (matching Particles): > 0 pick a random pool slot as parent; if that parent is alive, copy its position, direction and current deposit color (the color, passed through `dominant_color`, becomes both the respawned actor's deposit color and its new seed color, so colors can migrate between colonies as in Particles); if the parent slot is not alive, behave as = 0. = 0 respawn at a uniformly random field position keeping its own seed color (through `dominant_color`). Then offset exactly `spawnRandomOffset` perpendicular to the direction, to a random side, and wrap/clamp into the field. < 0 no respawn (slot becomes not alive). Speed resets to `minSpeed`, age to 0.
 
 Actors leave the pool when evicted by the ring (oldest overwritten) or by death with no respawn.
 
@@ -172,7 +172,7 @@ One shared set, all live-editable in the panel. Defaults come from Particles `co
 
 | Name | Default | Range |
 |---|---|---|
-| `poolSize` | 131072 (2^17) | 2^14 – 2^22 (powers of two) |
+| `poolSize` | 131072 (2^17) | 2^14 – 2^22 (powers of two; options above the device's `maxStorageBufferBindingSize / 64` are hidden) |
 | `lookSlices` | 3 | 1 – 8 |
 | `lookRadians` | 1.0 | 0 – π |
 | `lookDistance` | 10 | 1 – 64 |
