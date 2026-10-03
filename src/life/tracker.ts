@@ -108,16 +108,20 @@ export class ClusterTracker {
       claim: null as number | null,
     }));
 
+    // Which previous cluster owned each cell, so overlaps cost one lookup per cell.
+    const prevOwner = new Map<number, number>();
+    for (const [id, p] of this.prev) for (const k of p.keys) prevOwner.set(k, id);
+
     // 1. Claim by largest cell overlap (ties toward lower prev id).
     for (const g of groups) {
+      const overlaps = new Map<number, number>();
+      for (const k of g.keys) {
+        const id = prevOwner.get(k);
+        if (id !== undefined) overlaps.set(id, (overlaps.get(id) ?? 0) + 1);
+      }
       let best: { id: number; overlap: number } | null = null;
-      for (const [id, p] of this.prev) {
-        let overlap = 0;
-        for (const k of g.keys) if (p.keys.has(k)) overlap++;
-        if (
-          overlap > 0 &&
-          (!best || overlap > best.overlap || (overlap === best.overlap && id < best.id))
-        ) {
+      for (const [id, overlap] of overlaps) {
+        if (!best || overlap > best.overlap || (overlap === best.overlap && id < best.id)) {
           best = { id, overlap };
         }
       }
@@ -125,15 +129,20 @@ export class ClusterTracker {
     }
 
     // 2. Fallback: unclaimed group adopts nearest unclaimed prev centroid within 3.
+    const claimed = new Set<number>();
+    for (const g of groups) if (g.claim !== null) claimed.add(g.claim);
     for (const g of groups) {
       if (g.claim !== null) continue;
       let best: { id: number; d: number } | null = null;
       for (const [id, p] of this.prev) {
-        if (groups.some(o => o.claim === id)) continue;
+        if (claimed.has(id)) continue;
         const d = Math.hypot(g.centroid.x - p.centroid.x, g.centroid.y - p.centroid.y);
         if (d <= 3 && (!best || d < best.d || (d === best.d && id < best.id))) best = { id, d };
       }
-      if (best) g.claim = best.id;
+      if (best) {
+        g.claim = best.id;
+        claimed.add(best.id);
+      }
     }
 
     // 3. Splits: several groups claiming one prev id -> largest keeps it.

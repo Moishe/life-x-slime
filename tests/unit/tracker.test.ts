@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ClusterTracker } from '../../src/life/tracker';
+import { LifeEngine } from '../../src/life/engine';
+import { mulberry32 } from '../../src/rng';
 
 const cells = (list: [number, number][]) => list.map(([x, y]) => ({ x, y }));
 
@@ -113,5 +115,21 @@ describe('ClusterTracker', () => {
     const ev = t.update(cells([[11, 10], [12, 10], [13, 10]])); // shifted right by 1
     expect(ev.updated[0].id).toBe(id);
     expect(ev.updated[0].velocity).toBeCloseTo(1);
+  });
+});
+
+describe('ClusterTracker at large board sizes', () => {
+  it('tracks a busy 512x512 board in well under a Life tick', () => {
+    const engine = new LifeEngine(512, 512);
+    const rng = mulberry32(1);
+    for (let y = 0; y < 512; y++) {
+      for (let x = 0; x < 512; x++) if (rng() < 0.2) engine.set(x, y, true);
+    }
+    const t = new ClusterTracker(512, 512);
+    t.update(engine.liveCells());
+    engine.tick();
+    const start = performance.now();
+    t.update(engine.liveCells());
+    expect(performance.now() - start).toBeLessThan(250);
   });
 });
