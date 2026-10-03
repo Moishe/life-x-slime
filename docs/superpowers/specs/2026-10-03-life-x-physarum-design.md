@@ -15,6 +15,7 @@ An exploration tool for watching a Conway's Life simulation "leak" into an HSV-a
 - Each newborn Life cell spawns N actors (default 16) in its organism's color inside the cell's 16×16 block of the Physarum field.
 - Physarum actors sense, steer toward and deposit HSV pheromone using the algorithm from `~/src/Particles`, ported to WGSL with clear bugs fixed.
 - Actors also reproduce (flat probability per step), inheriting velocity with variance, and respawn on death.
+- Each Life cell that dies seeds food in its organism's color over its 16×16 block. Actors are attracted to food whose hue is close to their own, and die where food is dense (exhaustion).
 - Both layers render composited on one canvas with independent opacity. The user places Life patterns and controls all Physarum parameters through a lil-gui panel.
 - Data flow is one-way: Life → Physarum. Physarum never affects Life.
 
@@ -61,7 +62,7 @@ One `requestAnimationFrame` loop drives everything:
 
 ### Data flow per Life tick
 
-`engine.tick()` → births/deaths → `tracker.update()` → organisms with ids → `palette` assigns/keeps colors → `spawner` turns each birth into spawn requests (using the newborn cell's organism color after regrouping) → requests are uploaded to the GPU and injected into the actor ring.
+`engine.tick()` → births/deaths → `tracker.update()` → organisms with ids → `palette` assigns/keeps colors → `spawner` turns each birth into spawn requests (using the newborn cell's organism color after regrouping) → requests are uploaded to the GPU and injected into the actor ring. In parallel, each death (attributed to the organism the cell belonged to on the previous tick) becomes a food-seed request, uploaded and applied on the first Physarum step after the tick.
 
 The tracker's events and metrics for the latest tick are exposed from a single accessor so a future MIDI module can subscribe without touching the simulation.
 
@@ -90,7 +91,14 @@ Each live cell's color is its organism's color.
 - **Spawn mode** (toggle, default **burst**):
   - *Burst:* all spawns for a Life tick are injected on the first Physarum step after the tick.
   - *Trickle:* spawns are spread as evenly as possible across the Physarum steps until the next Life tick (30 at the default rates).
-- Placing patterns or painting cells does not spawn actors. Only real Life ticks do. Edits while paused re-run the tracker so colors update immediately.
+- Placing patterns or painting cells does not spawn actors or seed food. Only real Life ticks do. Edits while paused re-run the tracker so colors update immediately.
+
+## Bridge: deaths → food
+
+- Each Life cell that dies seeds food over its 16×16 block, in the color of the organism the cell belonged to on the previous tick.
+- Applied by a render pass drawing one 16×16 quad per death into the food texture with additive blending: RGB += `organismColor.rgb · foodPerDeath`, alpha += `foodPerDeath`.
+- Always applied in one go on the first Physarum step after the Life tick (the burst/trickle toggle applies only to actor spawns).
+- Food is the only thing written to the food texture besides fade and clear: **actors do not deposit food** (a deliberate departure from Particles).
 
 ## Physarum
 
@@ -107,9 +115,10 @@ Port `~/src/Particles/Particles Shared/Shaders.metal` behaviour, with these **fi
    ```
    Example: a.h=0.9, b.h=0.1, d=0.25 → 0.95.
 2. **Food term.** Convert sensed food RGB to HSV before `hsv_distance`, and invert the broken condition so food attracts as intended: `foodVal = food_sensitivity / max(d, 0.01)`, where `d = hsv_distance(rgb2hsv(food.rgb), seedHsv)` (the 0.01 floor keeps it finite). Food lowers a candidate's score (better), i.e. the candidate score is `dist - foodVal`. (The original adds `foodVal`; with the fixed formula, subtraction makes closer-hue food more attractive.)
-3. **Candidate selection.** Store the full score (`dist ± foodVal`) in `min_distance`, not just `dist`, so all candidates are compared consistently.
-4. **Blur read/write hazard.** Diffusion reads texture A and writes texture B (ping-pong).
-5. **Stale pheromone after respawn.** Sample pheromone for the deposit color after respawn handling, at the actor's final position.
+3. **Exhaustion uses food amount.** Death by exhaustion tests the food texture's alpha (accumulated amount): `food.a >= food_exhaustion`. The original used `length(food.rgba)`, which pure palette colors can never push to its default threshold of 2.0.
+4. **Candidate selection.** Store the full score (`dist ± foodVal`) in `min_distance`, not just `dist`, so all candidates are compared consistently.
+5. **Blur read/write hazard.** Diffusion reads texture A and writes texture B (ping-pong).
+6. **Stale pheromone after respawn.** Sample pheromone for the deposit color after respawn handling, at the actor's final position.
 
 Things deliberately **kept** for visual character:
 
@@ -121,7 +130,7 @@ Things deliberately **kept** for visual character:
 - Speed ramps up by `rand·0.01` per step, capped at `maxSpeed`.
 - `hsv_distance`: `sqrt(hd² + sd² + vd²)` with circular hue difference `hd = min(|Δh|, 1-|Δh|)`.
 - Deposit color drifts: `color = hsv_mix(pheromoneAtLoc, color, intensity)`; sensing always uses the immutable seed color.
-- Deposit overwrites the trail pixel (last writer wins); food deposit is additive.
+- Deposit overwrites the trail pixel (last writer wins).
 - `lock_to_hsv_angles` / `dominant_color` behaviour on respawn color.
 - Per-actor xorshift RNG.
 
@@ -137,14 +146,14 @@ Things deliberately **kept** for visual character:
 
 ### One Physarum step
 
-1. **Agent pass (compute).** For each alive actor: move (`pos += speed·(cos dir, sin dir)`); wrap or kill on out-of-bounds per `wrapBounds`; age++; death check (`age > life`, or out-of-bounds without wrap, or `length(food@pos) >= food_exhaustion`) → respawn per `always_spawn_from_parent`; sense (`lookSlices` × 2 sensors at `lookDistance`, reading trail A and food); turn (`directionRandomization`, `directionMomentum`); speed ramp; compute deposit color from trail A at the final position. Then with probability `spawnProbability`, append a child to the child queue.
+1. **Agent pass (compute).** For each alive actor: move (`pos += speed·(cos dir, sin dir)`); wrap or kill on out-of-bounds per `wrapBounds`; age++; death check (`age > life`, or out-of-bounds without wrap, or `food@pos.a >= food_exhaustion`) → respawn per `always_spawn_from_parent`; sense (`lookSlices` × 2 sensors at `lookDistance`, reading trail A and food); turn (`directionRandomization`, `directionMomentum`); speed ramp; compute deposit color from trail A at the final position. Then with probability `spawnProbability`, append a child to the child queue.
 2. **Inject pass (compute).** For each Life spawn request and each queued child, write a new alive actor at `atomicAdd(head,1) % poolSize`. Reset the child queue count.
 3. **Diffuse/fade pass.** Every `blurInterval` steps: read trail A, write trail B with
    - `blurMultiplier == 0`: `rgb - fadeDecrement`
    - otherwise: `max(0, (sum3x3 + center·blurMultiplier) / (blurMultiplier + 9)) - fadeDecrement`
    On steps where it doesn't run, copy A → B.
-4. **Deposit pass (render).** Draw each alive actor as a 1-px point into trail B (blend: replace RGB) and into the food texture (additive: `color.rgb·food_intensity`, alpha `food_intensity`).
-5. **Food fade.** Every `foodFadeInterval` steps: `rgb - foodFadeDecrement`, clamped at 0.
+4. **Deposit pass (render).** Draw each alive actor as a 1-px point into trail B (blend: replace RGB). Actors do not write to the food texture.
+5. **Food seed + fade.** On the first step after a Life tick, draw the death food quads (see Bridge: deaths → food). Every `foodFadeInterval` steps: `rgba - foodFadeDecrement`, clamped at 0 (alpha fades too, so exhaustion zones expire).
 6. Swap A and B.
 
 ### Lifecycle
@@ -172,8 +181,8 @@ One shared set, all live-editable in the panel. Defaults come from Particles `co
 | `minSpeed` | 0.3 | 0 – 5 |
 | `maxSpeed` | 2.0 | 0 – 10 |
 | `intensity` | 1.0 | 0 – 2 |
-| `food_intensity` | 0.1 | 0 – 1 |
-| `food_exhaustion` | 2.0 | 0 – 2 |
+| `foodPerDeath` | 0.5 | 0 – 1 |
+| `food_exhaustion` | 1.0 | 0 – 1 |
 | `food_sensitivity` | 0.1 | 0 – 1 |
 | `life` | 10000 (steps) | 1 – 100000 |
 | `always_spawn_from_parent` | 1 | -1, 0, 1 |
@@ -188,7 +197,7 @@ One shared set, all live-editable in the panel. Defaults come from Particles `co
 | `fadeDecrement` (trail) | 0.01 | 0 – 0.1 |
 | `blurMultiplier` | 0 | 0 – 16 |
 | `blurInterval` | 1 | 1 – 10 |
-| `foodFadeDecrement` | 0.01 | 0 – 0.1 |
+| `foodFadeDecrement` | 0.002 | 0 – 0.1 |
 | `foodFadeInterval` | 1 | 1 – 10 |
 | `wrapBounds` | true | bool |
 | `rngSeed` | 1 | integer |
@@ -206,7 +215,7 @@ Changing `poolSize` reallocates the actor buffer and clears all actors (Life is 
 
 lil-gui panel folders:
 
-- **Layers:** `lifeOpacity` (default 0.6), `physarumOpacity` (default 1.0).
+- **Layers:** `lifeOpacity` (default 0.6), `physarumOpacity` (default 1.0), food view toggle (also key **T**, as in Particles) that shows the food texture in place of the trail.
 - **Life:** play/pause, step, clear, random fill + density (default 0.2), tick rate (default 1 Hz, range 0.25 – 8 Hz).
 - **Bridge:** `actorsPerBirth` (default 16, range 0 – 256), spawn mode (burst / trickle).
 - **Physarum:** all parameters above, grouped (Sensing, Movement, Deposit & Color, Food, Fade, Reproduction & Lifecycle, World); buttons: clear trail, clear food, clear actors.
@@ -234,6 +243,7 @@ TDD throughout. All three test types are required.
 - Tracker: life-ambient's tests ported.
 - Palette: new organism gets a palette color; color persists with id; split fragments get new colors; merge keeps the dominant id's color; seeded determinism.
 - Patterns: rotation and placement (ported tests).
+- Death food: each death produces one food-seed request with the dying cell's previous-tick organism color and block; edits while paused produce none.
 - Spawner: positions within the 16×16 block; count = births × `actorsPerBirth`; color = organism color; burst puts all on one step; trickle distributes across steps with total preserved.
 - CPU reference math (`src/physarum/reference.ts`): `rgb2hsv`/`hsv2rgb`, `hsv_mix` including the wrap case (0.9, 0.1, 0.25 → 0.95) and the reverse case, `hsv_distance`, ring slot arithmetic.
 
@@ -242,11 +252,13 @@ TDD throughout. All three test types are required.
 - Inject pass: wraps around the ring and evicts the oldest; Life requests and children both inserted.
 - Agent pass: a seeded single-actor step matches expected position/direction; out-of-bounds wrap vs kill.
 - Diffuse/fade: known input texture → expected output for both blur modes.
+- Food seed: a death quad adds `color·foodPerDeath` / `foodPerDeath` alpha over exactly the 16×16 block; exhaustion kills an actor on food with alpha ≥ `food_exhaustion` and not below; food steering prefers a sensor over matching-hue food to one over other-hue food.
 - Reproduction: `spawnProbability = 1` doubles alive actors (up to capacity); `= 0` adds none.
 
 **End-to-end (Playwright, Chrome with WebGPU):**
 - Load the page; no console errors.
 - Place a glider, step Life: organism count readout = 1; alive actors > 0 after the next tick; canvas contains pixels of the glider's palette color.
+- Place a blinker and step Life once: with the food view on, the canvas contains the blinker's palette color in the blocks of the two cells that died.
 - Change `poolSize`: alive actors resets to 0.
 - No-WebGPU path shows the fallback message.
 
