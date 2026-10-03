@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PhysarumSim } from '../../src/physarum/simulation';
 import { DEFAULT_PARAMS } from '../../src/physarum/params';
-import { actor, getDevice, pixel, readTexture } from './helpers';
+import { actor, getDevice, pixel, readTexture, setPixel, solidTexels, writeTexture } from './helpers';
 
 const W = 64;
 
@@ -95,5 +95,51 @@ describe('PhysarumSim', () => {
     sim.clearFood();
     expect(pixel(await readTexture(device, sim.trail, W, W), W, 5, 7)).toEqual([0, 0, 0, 255]);
     expect(pixel(await readTexture(device, sim.foodTexture, W, W), W, 3, 3)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('diffuses and swaps only every blurInterval steps; other steps deposit into the same trail', async () => {
+    const device = await getDevice();
+    const sim = await makeSim();
+    sim.params.blurInterval = 2;
+    sim.params.fadeDecrement = 0.1;
+    // A pixel away from the actor, so only fading (never deposit) can change it.
+    const trail = solidTexels(W, W, [0, 0, 0, 255]);
+    setPixel(trail, W, 20, 20, [255, 255, 255, 255]);
+    writeTexture(device, sim.trail, W, W, trail);
+
+    const green = { x: 5.5, y: 7.5, color: [0, 1, 0, 1] as [number, number, number, number], seed: [0, 1, 0, 1] as [number, number, number, number] };
+    const faded = [255, 230, 230, 204, 204];
+    const observe = async (step: number) => {
+      const out = await readTexture(device, sim.trail, W, W);
+      expect(pixel(out, W, 5, 7), `actor pixel after step ${step}`).toEqual([0, 255, 0, 255]);
+      expect(Math.abs(pixel(out, W, 20, 20)[0] - faded[step + 1]), `other pixel after step ${step}`).toBeLessThanOrEqual(2);
+    };
+    sim.step([actor(green)], []); // step 0 diffuses
+    await observe(0);
+    sim.step([], []); // step 1 does not
+    await observe(1);
+    sim.step([], []); // step 2 diffuses
+    await observe(2);
+    sim.step([], []); // step 3 does not
+    await observe(3);
+  });
+
+  it('fades food only every foodFadeInterval steps', async () => {
+    const device = await getDevice();
+    const sim = await makeSim();
+    sim.params.foodFadeInterval = 2;
+    sim.params.foodFadeDecrement = 0.1;
+    const alpha = async () => pixel(await readTexture(device, sim.foodTexture, W, W), W, 20, 36)[3];
+
+    sim.step([], [{ cellX: 1, cellY: 2, rgb: [1, 0, 0] }]); // step 0: seeded, then faded
+    const afterFirstFade = await alpha();
+    expect(afterFirstFade).toBeGreaterThan(60);
+    sim.step([], []); // step 1: no fade
+    expect(await alpha()).toBe(afterFirstFade);
+    sim.step([], []); // step 2: fade
+    const afterSecondFade = await alpha();
+    expect(Math.abs(afterFirstFade - afterSecondFade - 26)).toBeLessThanOrEqual(2);
+    sim.step([], []); // step 3: no fade
+    expect(await alpha()).toBe(afterSecondFade);
   });
 });

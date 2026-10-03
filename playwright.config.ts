@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
-// Use the same browser setup that worked for GPU tests in Task 1
-// (if GPU tests needed headless: false or channel 'chrome', mirror it here).
+// Runs the e2e suite in headless Chromium with WebGPU enabled
+// (--enable-unsafe-webgpu), against the Vite dev server on port 5199.
 export default defineConfig({
   testDir: 'e2e',
   timeout: 30_000,

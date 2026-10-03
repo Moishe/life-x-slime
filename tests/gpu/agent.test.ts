@@ -123,6 +123,14 @@ describe('AgentPass death and respawn', () => {
     expect(a.seed.slice(0, 3)).toEqual([1, 0, 0]);
   });
 
+  it('gives a respawned actor a fresh life from params', async () => {
+    const { actors } = await runAgent([actor({ age: 9, life: 5 })],
+      { alwaysSpawnFromParent: 0, spawnRandomOffset: 0, life: 777 });
+    expect(actors[0].alive).toBe(true);
+    expect(actors[0].age).toBe(1);
+    expect(actors[0].life).toBe(777);
+  });
+
   it('respawns from a living parent, adopting its position, direction and color', async () => {
     const pool = 64;
     // Pick an rng seed whose first draw selects a parent other than slot 0.

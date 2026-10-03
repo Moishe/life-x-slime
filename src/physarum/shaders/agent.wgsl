@@ -59,6 +59,7 @@ fn respawn(a: ptr<function, Actor>, rng: ptr<function, u32>) {
   }
   (*a).pos += vec2f(cos(side), sin(side)) * params.spawnRandomOffset;
   (*a).age = 0u;
+  (*a).life = params.life;
   (*a).speed = params.minSpeed;
 }
 

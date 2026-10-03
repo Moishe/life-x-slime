@@ -14,8 +14,10 @@ const canvas = document.querySelector<HTMLCanvasElement>('#field')!;
 const message = document.querySelector<HTMLDivElement>('#message')!;
 
 function showMessage(text: string, offerReload = false): void {
+  // Append when already visible so several errors can all be read.
+  if (message.hidden) message.textContent = text;
+  else message.append('\n', text);
   message.hidden = false;
-  message.textContent = text;
   if (offerReload) {
     const button = document.createElement('button');
     button.textContent = 'Reload';
@@ -96,17 +98,22 @@ function attachUi(app: App, poolSizes: number[]): void {
   }, true);
 
   const updateReadouts = createReadouts(document.querySelector<HTMLElement>('#readouts')!);
-  setInterval(async () => {
-    await app.pollCounters();
-    const now = performance.now();
-    updateReadouts({
-      fps: app.stats.frames.sample(now),
-      physStepsPerSec: app.stats.physSteps.sample(now),
-      alive: app.alive,
-      organisms: app.world.organismCount(),
-      lifeInsertsPerSec: app.stats.lifeInserts.sample(now),
-      childInsertsPerSec: app.stats.childInserts.sample(now),
-    });
+  const readoutTimer = setInterval(async () => {
+    try {
+      await app.pollCounters();
+      const now = performance.now();
+      updateReadouts({
+        fps: app.stats.frames.sample(now),
+        physStepsPerSec: app.stats.physSteps.sample(now),
+        alive: app.alive,
+        organisms: app.world.organismCount(),
+        lifeInsertsPerSec: app.stats.lifeInserts.sample(now),
+        childInsertsPerSec: app.stats.childInserts.sample(now),
+      });
+    } catch (error) {
+      clearInterval(readoutTimer);
+      console.error('Readout polling stopped:', error);
+    }
   }, 250);
 }
 
@@ -134,7 +141,12 @@ async function start(): Promise<void> {
 
   let last = performance.now();
   const loop = (now: number) => {
-    app.frame(now - last);
+    try {
+      app.frame(now - last);
+    } catch (error) {
+      showMessage(`Rendering stopped: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
     last = now;
     document.body.dataset.ready = 'true';
     requestAnimationFrame(loop);
@@ -142,4 +154,4 @@ async function start(): Promise<void> {
   requestAnimationFrame(loop);
 }
 
-void start();
+start().catch(error => showMessage(`Failed to start: ${error instanceof Error ? error.message : String(error)}`));
