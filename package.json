@@ -1,0 +1,31 @@
+{
+  "name": "life-x-physarum",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --project unit",
+    "test:gpu": "vitest run --project gpu",
+    "test:e2e": "playwright test",
+    "test:all": "npm run typecheck && npm test && npm run test:gpu && npm run test:e2e"
+  },
+  "dependencies": {
+    "lil-gui": "^0.21.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.4",
+    "@types/pngjs": "^6.0.5",
+    "@vitest/browser": "^3.2.7",
+    "@webgpu/types": "^0.1.74",
+    "playwright": "^1.63.0",
+    "pngjs": "^7.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^6.4.3",
+    "vitest": "^3.2.7"
+  }
+}
