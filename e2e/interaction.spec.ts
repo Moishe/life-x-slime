@@ -78,3 +78,56 @@ test('changing the pool size clears the actors', async ({ page }) => {
   await page.getByTestId('pool-size').locator('select').selectOption({ label: '16384' });
   await expect.poll(alive(page), { timeout: 5000 }).toBe(0);
 });
+
+const isGhostTinted = ([r, , b]: [number, number, number]) => b > 100 && b > r + 50;
+
+async function hoverCell(page: Page, x: number, y: number): Promise<void> {
+  const box = (await page.locator('#field').boundingBox())!;
+  const s = box.width / 128;
+  await page.mouse.move(box.x + (x + 0.5) * s, box.y + (y + 0.5) * s);
+}
+
+test('R rotates the placement ghost', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: 'Blinker', exact: true }).click();
+  await hoverCell(page, 60, 64);
+  await page.waitForTimeout(200);
+  expect(isGhostTinted(await cellPixel(page, 61, 64))).toBe(true);
+  expect(isGhostTinted(await cellPixel(page, 60, 65))).toBe(false);
+  await page.keyboard.press('r');
+  await page.waitForTimeout(200);
+  expect(isGhostTinted(await cellPixel(page, 60, 65))).toBe(true);
+  expect(isGhostTinted(await cellPixel(page, 61, 64))).toBe(false);
+});
+
+test('paint mode toggles a cell', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: 'Paint cells', exact: true }).click();
+  await clickCell(page, 30, 30);
+  await expect(page.getByTestId('readout-organisms')).toHaveText('1');
+  await clickCell(page, 30, 30);
+  await expect(page.getByTestId('readout-organisms')).toHaveText('0');
+});
+
+test('placing a pattern spawns no actors until a Life step', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: 'Glider', exact: true }).click();
+  await clickCell(page, 60, 60);
+  await page.waitForTimeout(1000);
+  await expect(page.getByTestId('readout-alive')).toHaveText('0');
+  await page.getByRole('button', { name: 'step', exact: true }).click();
+  await expect.poll(alive(page), { timeout: 5000 }).toBeGreaterThan(0);
+});
+
+test('hotkeys are ignored while typing in a panel input', async ({ page }) => {
+  await boot(page);
+  const foodView = page.locator('.lil-gui .lil-controller', { hasText: 'food view' }).locator('input[type="checkbox"]');
+  await expect(foodView).not.toBeChecked();
+  await page.locator('.lil-gui .lil-controller', { hasText: 'lookDistance' }).locator('input[type="text"], input[type="number"]').first().focus();
+  await page.keyboard.press('t');
+  await page.waitForTimeout(200);
+  await expect(foodView).not.toBeChecked();
+  await page.locator('body').click({ position: { x: 5, y: 5 } }); // move focus off the input
+  await page.keyboard.press('t');
+  await expect(foodView).toBeChecked();
+});
