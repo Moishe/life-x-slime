@@ -217,3 +217,45 @@ test('loading a bad settings file shows a message that can be closed', async ({ 
   await page.locator('#message').getByRole('button', { name: 'Close' }).click();
   await expect(page.locator('#message')).toBeHidden();
 });
+
+test('save images downloads the Life, Physarum and mixed images at full size', async ({ page }) => {
+  await boot(page, 128);
+  await page.getByRole('button', { name: 'Glider', exact: true }).click();
+  await clickCell(page, 60, 60); // live cells include (61, 60)
+  await page.mouse.move(0, 0);
+  const downloads: Map<string, Buffer> = new Map();
+  const collected = new Promise<void>(resolve => {
+    page.on('download', async download => {
+      downloads.set(download.suggestedFilename(), await readFile(await download.path()));
+      if (downloads.size === 3) resolve();
+    });
+  });
+  await page.getByRole('button', { name: 'save images' }).click();
+  await collected;
+
+  const names = [...downloads.keys()].sort();
+  expect(names).toHaveLength(3);
+  for (const [name, suffix] of names.map((n, i) => [n, ['life', 'mix', 'physarum'][i]])) {
+    expect(name).toMatch(new RegExp(`^life-x-physarum-\\d{4}-\\d{2}-\\d{2}-\\d{2}-\\d{2}-\\d{2}-${suffix}\\.png$`));
+  }
+  const image = (suffix: string) => PNG.sync.read(downloads.get(names.find(n => n.endsWith(`-${suffix}.png`))!)!);
+  const at = (png: PNG, cellX: number, cellY: number) => {
+    const s = png.width / grid;
+    const o = (Math.floor((cellY + 0.5) * s) * png.width + Math.floor((cellX + 0.5) * s)) * 4;
+    return [png.data[o], png.data[o + 1], png.data[o + 2]];
+  };
+  const life = image('life');
+  const physarum = image('physarum');
+  const mix = image('mix');
+  for (const png of [life, physarum, mix]) expect([png.width, png.height]).toEqual([2048, 2048]);
+
+  // Life image: the live cell is a fully saturated palette color; an empty cell is black.
+  const cell = at(life, 61, 60);
+  expect(Math.max(...cell)).toBe(255);
+  expect(Math.min(...PALETTE_HUES.map(h => hueDiff(h, hueDegrees(cell as [number, number, number]))))).toBeLessThan(2);
+  expect(at(life, 10, 10)).toEqual([0, 0, 0]);
+  // Physarum image: no actors yet (Life is paused), so the trail under the cell is empty.
+  expect(at(physarum, 61, 60)).toEqual([0, 0, 0]);
+  // Mix image: Life at the panel's 0.6 opacity over the empty trail.
+  at(mix, 61, 60).forEach((v, i) => expect(Math.abs(v - Math.round(cell[i] * 0.6))).toBeLessThanOrEqual(2));
+});

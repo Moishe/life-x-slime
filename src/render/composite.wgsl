@@ -1,7 +1,7 @@
 struct CompositeParams {
   physarumOpacity: f32,
   lifeOpacity: f32,
-  _pad0: f32,
+  ghostOpacity: f32,
   _pad1: f32,
 }
 
@@ -26,7 +26,8 @@ fn vs(@builtin(vertex_index) vi: u32) -> ScreenOut {
   return out;
 }
 
-// Physarum layer (alpha ignored) over black, then Life cells, then the ghost.
+// Physarum layer (alpha ignored) over black, then Life cells, then the ghost,
+// each scaled by its opacity.
 @fragment
 fn fs(v: ScreenOut) -> @location(0) vec4f {
   let field = textureSample(fieldTexture, fieldSampler, v.uv).rgb * composite.physarumOpacity;
@@ -35,6 +36,6 @@ fn fs(v: ScreenOut) -> @location(0) vec4f {
   let life = textureLoad(lifeTexture, cell, 0);
   var rgb = mix(field, life.rgb, life.a * composite.lifeOpacity);
   let ghost = textureLoad(ghostTexture, cell, 0);
-  rgb = mix(rgb, ghost.rgb, ghost.a);
+  rgb = mix(rgb, ghost.rgb, ghost.a * composite.ghostOpacity);
   return vec4f(rgb, 1.0);
 }

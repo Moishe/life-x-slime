@@ -7,6 +7,7 @@ import { LifeWorld } from '../life/world';
 import type { FoodSeed } from '../physarum/layout';
 import { PhysarumSim } from '../physarum/simulation';
 import { Compositor } from '../render/compositor';
+import { captureImage } from '../render/snapshot';
 import { ghostTexels, lifeTexels } from '../render/texels';
 import { mulberry32, type Rng } from '../rng';
 import type { LoadedSettings } from './settings-file';
@@ -38,9 +39,8 @@ export class App {
   private ghostDirty = true;
 
   constructor(
-    device: GPUDevice,
+    private readonly device: GPUDevice,
     private readonly context: GPUCanvasContext,
-    format: GPUTextureFormat,
     seed: number,
     lifeSize: number,
   ) {
@@ -52,7 +52,7 @@ export class App {
     });
     this.sim.params.rngSeed = seed;
     this.scheduler = new SpawnScheduler(this.settings.poolSize);
-    this.compositor = new Compositor(device, format, lifeSize);
+    this.compositor = new Compositor(device, lifeSize);
   }
 
   frame(dtMs: number): void {
@@ -152,7 +152,27 @@ export class App {
     this.stats.lifeInserts.add(spawns.length);
   }
 
+  // RGBA pixels of the Life layer alone, the trail alone, and the two mixed at
+  // the panel's opacities, all at the field's full size and without the ghost.
+  // All three renders are submitted before any is awaited, so they show the same moment.
+  async snapshot(): Promise<{ life: Uint8Array; physarum: Uint8Array; mix: Uint8Array }> {
+    this.refreshCellTextures();
+    const trail = this.sim.trail;
+    const [life, physarum, mix] = await Promise.all([
+      captureImage(this.device, this.compositor, trail, 0, 1, FIELD_SIZE),
+      captureImage(this.device, this.compositor, trail, 1, 0, FIELD_SIZE),
+      captureImage(this.device, this.compositor, trail, this.settings.physarumOpacity, this.settings.lifeOpacity, FIELD_SIZE),
+    ]);
+    return { life, physarum, mix };
+  }
+
   private render(): void {
+    this.refreshCellTextures();
+    const field = this.settings.foodView ? this.sim.foodTexture : this.sim.trail;
+    this.compositor.render(this.context.getCurrentTexture(), field, this.settings.physarumOpacity, this.settings.lifeOpacity, 1);
+  }
+
+  private refreshCellTextures(): void {
     if (this.lifeDirty) {
       this.compositor.setLife(lifeTexels(this.world.liveCells(), this.settings.lifeSize));
       this.lifeDirty = false;
@@ -161,7 +181,5 @@ export class App {
       this.compositor.setGhost(ghostTexels(this.ghost, this.settings.lifeSize));
       this.ghostDirty = false;
     }
-    const field = this.settings.foodView ? this.sim.foodTexture : this.sim.trail;
-    this.compositor.render(this.context.getCurrentTexture().createView(), field, this.settings.physarumOpacity, this.settings.lifeOpacity);
   }
 }

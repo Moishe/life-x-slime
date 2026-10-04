@@ -1,6 +1,6 @@
 import './style.css';
 import { App } from './app/app';
-import { DEFAULT_SETTINGS, seedFromUrl, sizeFromUrl } from './app/settings';
+import { DEFAULT_SETTINGS, FIELD_SIZE, seedFromUrl, sizeFromUrl } from './app/settings';
 import { parseSettings, serializeSettings } from './app/settings-file';
 import { initGpu } from './gpu/device';
 import { onShaderError } from './gpu/shader';
@@ -9,6 +9,7 @@ import { DEFAULT_PARAMS } from './physarum/params';
 import { buildPanel } from './ui/panel';
 import { buildPatternBar, type Tool } from './ui/pattern-bar';
 import { cellFromPointer, ghostCells } from './ui/placement';
+import { downloadBlob, encodePng, snapshotFilenames } from './ui/export-images';
 import { createReadouts } from './ui/readouts';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#field')!;
@@ -38,13 +39,20 @@ function showMessage(text: string, action: 'none' | 'reload' | 'close' = 'none')
 const SETTINGS_FILENAME = 'life-x-physarum-settings.json';
 
 function saveSettingsFile(app: App): void {
-  const blob = new Blob([serializeSettings(app.settings, app.sim.params)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = SETTINGS_FILENAME;
-  link.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(new Blob([serializeSettings(app.settings, app.sim.params)], { type: 'application/json' }), SETTINGS_FILENAME);
+}
+
+// Downloads the Life layer, the Physarum trail and their mix as three PNGs.
+async function saveImages(app: App): Promise<void> {
+  try {
+    const names = snapshotFilenames(new Date());
+    const images = await app.snapshot();
+    for (const part of ['life', 'physarum', 'mix'] as const) {
+      downloadBlob(await encodePng(images[part], FIELD_SIZE), names[part]);
+    }
+  } catch (error) {
+    showMessage(`Could not save images: ${error instanceof Error ? error.message : String(error)}`, 'close');
+  }
 }
 
 // Asks for a settings file, applies it, and calls `onApplied` so the panel can refresh.
@@ -93,6 +101,7 @@ function attachUi(app: App, poolSizes: number[]): void {
     lifeSizeChanged: n => app.setLifeSize(n),
     seedChanged: seed => app.reseed(seed),
     saveSettings: () => saveSettingsFile(app),
+    saveImages: () => void saveImages(app),
     loadSettings: () => loadSettingsFile(app, poolSizes, () => gui.controllersRecursive().forEach(c => c.updateDisplay())),
   });
 
@@ -181,7 +190,7 @@ async function start(): Promise<void> {
   fitCanvas();
 
   const app = new App(
-    device, context, format,
+    device, context,
     seedFromUrl(location.search, DEFAULT_PARAMS.rngSeed),
     sizeFromUrl(location.search, DEFAULT_SETTINGS.lifeSize),
   );
