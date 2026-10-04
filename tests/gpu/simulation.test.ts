@@ -7,10 +7,11 @@ const W = 64;
 
 async function makeSim(poolSize = 256) {
   const sim = new PhysarumSim(await getDevice(), { width: W, height: W, poolSize, cellSize: 16 });
-  // Quiet, deterministic settings: actors stand still, never die, never reproduce.
+  // Quiet, deterministic settings: actors stand still, never die, never reproduce,
+  // deposit exactly their own color, and the trail neither blurs nor fades.
   sim.params = {
     ...DEFAULT_PARAMS, minSpeed: 0, maxSpeed: 0, spawnProbability: 0, alwaysSpawnFromParent: -1,
-    foodExhaustion: 0, fadeDecrement: 0, foodFadeDecrement: 0, life: 1000000,
+    foodExhaustion: 0, fadeDecrement: 0, foodFadeDecrement: 0, blurMultiplier: 0, intensity: 1, life: 1000000,
   };
   return sim;
 }

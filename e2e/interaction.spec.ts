@@ -6,11 +6,21 @@ const PALETTE_HUES = [0, 45, 90, 135, 180, 225, 270, 315];
 // Life board size the cell helpers map to; boot() sets it.
 let grid = 128;
 
+// Types a value into a lil-gui number control, found by its label.
+async function setNumber(page: Page, label: string, value: number): Promise<void> {
+  const input = page.locator('.lil-controller', { hasText: label }).locator('input');
+  await input.fill(String(value));
+  await input.press('Enter');
+}
+
 async function boot(page: Page, size = 128): Promise<void> {
   grid = size;
   await page.goto(`/?seed=7&size=${size}`);
   await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
   await page.getByRole('button', { name: 'play / pause' }).click(); // starts playing; pause it
+  // Color checks need Life cells clearly visible over the trail.
+  await setNumber(page, 'lifeOpacity', 0.6);
+  await page.locator('body').click({ position: { x: 5, y: 5 } }); // move focus off the panel input
 }
 
 async function clickCell(page: Page, x: number, y: number): Promise<void> {
@@ -152,13 +162,13 @@ test('changing the board size clears the board and rescales placement', async ({
   expect(Math.max(...(await cellPixel(page, 121, 121)))).toBeLessThan(40);
 });
 
-test('starts at 512x512 and keeps running with a randomly filled board', async ({ page }) => {
+test('starts at 64x64 and keeps running with a randomly filled board', async ({ page }) => {
   await page.goto('/?seed=7');
   await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
   await expect(page.getByTestId('board-size').locator('select')).toHaveValue(/./);
-  expect(await page.getByTestId('board-size').locator('select option:checked').textContent()).toBe('512');
+  expect(await page.getByTestId('board-size').locator('select option:checked').textContent()).toBe('64');
   await page.getByRole('button', { name: 'random fill' }).click();
-  await expect.poll(async () => Number(await page.getByTestId('readout-organisms').textContent())).toBeGreaterThan(100);
+  await expect.poll(async () => Number(await page.getByTestId('readout-organisms').textContent())).toBeGreaterThan(5);
   await page.waitForTimeout(3000);
   expect(Number(await page.getByTestId('readout-fps').textContent())).toBeGreaterThan(10);
   expect(Number(await page.getByTestId('readout-steps').textContent())).toBeGreaterThan(10);

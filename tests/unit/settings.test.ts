@@ -5,8 +5,8 @@ describe('settings', () => {
   it('has the spec sizes and defaults', () => {
     expect(FIELD_SIZE).toBe(2048);
     expect(DEFAULT_SETTINGS).toEqual({
-      playing: true, lifeHz: 1, randomDensity: 0.2, actorsPerBirth: 16, spawnMode: 'burst',
-      lifeOpacity: 0.6, physarumOpacity: 1, foodView: false, poolSize: 131072, lifeSize: 512,
+      playing: true, lifeHz: 7.5, randomDensity: 0.2, actorsPerBirth: 129, spawnMode: 'trickle',
+      lifeOpacity: 0.05, physarumOpacity: 1, foodView: false, poolSize: 1048576, lifeSize: 64,
     });
   });
 

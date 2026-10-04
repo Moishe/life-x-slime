@@ -21,15 +21,15 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   playing: true,
-  lifeHz: 1,
+  lifeHz: 7.5,
   randomDensity: 0.2,
-  actorsPerBirth: 16,
-  spawnMode: 'burst',
-  lifeOpacity: 0.6,
+  actorsPerBirth: 129,
+  spawnMode: 'trickle',
+  lifeOpacity: 0.05,
   physarumOpacity: 1,
   foodView: false,
   poolSize: DEFAULT_POOL_SIZE,
-  lifeSize: 512,
+  lifeSize: 64,
 };
 
 // Width of one Life cell's block on the Physarum field, in field pixels.

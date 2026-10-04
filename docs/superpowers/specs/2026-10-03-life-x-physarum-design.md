@@ -9,13 +9,13 @@ An exploration tool for watching a Conway's Life simulation "leak" into an HSV-a
 
 ## Summary
 
-- A 128×128 Life board (B3/S23, dead edges) ticks at 1 Hz on the CPU.
+- A Life board (B3/S23, dead edges; size selectable 64–1024, default 64×64) ticks at 7.5 Hz by default on the CPU.
 - A 2048×2048 Physarum field steps at 30 Hz on the GPU (WebGPU compute), with a ring-buffer pool of 2^17 actors by default.
 - Life cells are grouped into **organisms** by the cluster tracker ported from `~/src/life-ambient`. Each organism gets one of 8 palette colors.
-- Each newborn Life cell spawns N actors (default 16) in its organism's color inside the cell's 16×16 block of the Physarum field.
+- Each newborn Life cell spawns N actors (default 129) in its organism's color inside the cell's block of the Physarum field.
 - Physarum actors sense, steer toward and deposit HSV pheromone using the algorithm from `~/src/Particles`, ported to WGSL with clear bugs fixed.
 - Actors also reproduce (flat probability per step), inheriting velocity with variance, and respawn on death.
-- Each Life cell that dies seeds food in its organism's color over its 16×16 block. Actors are attracted to food whose hue is close to their own, and die where food is dense (exhaustion).
+- Each Life cell that dies seeds food in its organism's color over its cell block. Actors are attracted to food whose hue is close to their own, and die where food is dense (exhaustion).
 - Both layers render composited on one canvas with independent opacity. The user places Life patterns and controls all Physarum parameters through a lil-gui panel.
 - Data flow is one-way: Life → Physarum. Physarum never affects Life.
 
@@ -43,14 +43,14 @@ An exploration tool for watching a Conway's Life simulation "leak" into an HSV-a
 One `requestAnimationFrame` loop drives everything:
 
 - **Physarum clock:** fixed 30 Hz via a time accumulator, independent of display refresh. Each accumulated step runs one full Physarum step. Cap catch-up at a few steps per frame to avoid spiral-of-death.
-- **Life clock:** 1 Hz by default (adjustable via a tick-rate slider), driven from the same loop.
+- **Life clock:** 7.5 Hz by default (adjustable via a tick-rate slider), driven from the same loop.
 - **Render:** every display frame.
 
 ### Modules
 
 | Module | Runs on | Responsibility |
 |---|---|---|
-| `src/life/engine.ts` | CPU | 128×128 B3/S23 grid, dead edges. `tick()` returns births and deaths. Ported from life-ambient `engine/life.ts`. |
+| `src/life/engine.ts` | CPU | Square B3/S23 grid (board size setting), dead edges. `tick()` returns births and deaths. Ported from life-ambient `engine/life.ts`. |
 | `src/life/tracker.ts` (+ `src/life/geometry.ts`) | CPU | Organism grouping and identity across ticks. Ported from life-ambient `tracker/cluster.ts` (and its dependency `geometry.ts`) unchanged apart from import paths. Emits `{born, updated, died}` plus per-organism metrics each tick. |
 | `src/life/palette.ts` | CPU | Assigns palette colors to organisms (rules below). |
 | `src/life/world.ts` | CPU | Owns engine + tracker + palette; returns colored births/deaths per tick; the single accessor for organism state (future MIDI). |
@@ -70,7 +70,7 @@ The tracker's events and metrics for the latest tick are exposed from a single a
 
 ## Life
 
-- Grid 128×128, B3/S23, cells outside the board are dead.
+- Square grid of the selected board size (64, 128, 256, 512 or 1024), B3/S23, cells outside the board are dead. Each cell maps to a (2048 / size)-pixel square block of the field.
 - Tracker: union-find grouping with Chebyshev distance ≤ 2 (5×5 neighbourhood). Identity: each new group claims the previous id it overlaps most (ties → lower id); an unclaimed group adopts the nearest unclaimed previous centroid within distance 3; when several groups claim one id (split) the largest keeps it and the others get new ids; previous ids no group claimed are reported as died (so on a merge, the merged group keeps the id it overlaps most and the other id dies). Port life-ambient's implementation and tests as-is, including deterministic tie-breaks.
 
 ### Palette
@@ -88,9 +88,9 @@ Each live cell's color is its organism's color.
 
 ## Bridge: births → actors
 
-- `actorsPerBirth` (default 16).
-- Each spawned actor: position uniformly random within the newborn cell's 16×16 block on the field (cell (cx, cy) → field pixels [16cx, 16cx+16) × [16cy, 16cy+16)); direction uniformly random in [0, 2π); speed `minSpeed`; seed color and deposit color = the organism's palette color; age 0; life = `life` parameter; RNG state = a random non-zero u32 from the seeded CPU RNG.
-- **Spawn mode** (toggle, default **burst**):
+- `actorsPerBirth` (default 129).
+- Each spawned actor: position uniformly random within the newborn cell's cell block on the field (with cell size c = 2048 / board size, cell (cx, cy) → field pixels [c·cx, c·cx+c) × [c·cy, c·cy+c)); direction uniformly random in [0, 2π); speed `minSpeed`; seed color and deposit color = the organism's palette color; age 0; life = `life` parameter; RNG state = a random non-zero u32 from the seeded CPU RNG.
+- **Spawn mode** (toggle, default **trickle**):
   - *Burst:* all spawns for a Life tick are injected on the first Physarum step after the tick (spilling into following steps only if they exceed the per-step insert cap, below).
   - *Trickle:* at each Life tick, n = max(1, round(30 / lifeHz)); the queued spawns are spread as evenly as possible over the next n Physarum steps. If a new tick arrives while spawns are still queued, the leftovers stay queued and are spread together with the new ones. The queue keeps draining while Life is paused.
 - The spawn queue holds at most `poolSize` actors; beyond that the oldest queued spawns are dropped (they would be evicted by the ring anyway).
@@ -98,9 +98,9 @@ Each live cell's color is its organism's color.
 
 ## Bridge: deaths → food
 
-- Each Life cell that dies seeds food over its 16×16 block, in the color of the organism the cell belonged to on the previous tick.
-- Applied by a render pass drawing one 16×16 quad per death into the food texture with additive blending: RGB += `organismColor.rgb · foodPerDeath`, alpha += `foodPerDeath`.
-- Always applied on the first Physarum step after the Life tick (the burst/trickle toggle applies only to actor spawns), up to 128×128 seeds per step.
+- Each Life cell that dies seeds food over its cell block, in the color of the organism the cell belonged to on the previous tick.
+- Applied by a render pass drawing one cell-block quad per death into the food texture with additive blending: RGB += `organismColor.rgb · foodPerDeath`, alpha += `foodPerDeath`.
+- Always applied on the first Physarum step after the Life tick (the burst/trickle toggle applies only to actor spawns), up to one seed per Life cell per step.
 - Food is the only thing written to the food texture besides fade and clear: **actors do not deposit food** (a deliberate departure from Particles).
 
 ## Physarum
@@ -151,7 +151,7 @@ Things deliberately **kept** for visual character:
 - **Counters buffer:** `head` (ring write head), `childCount`, `aliveCount`, `childrenInserted` — all atomic u32. The insert slot is `atomicAdd(head, 1) & (poolSize − 1)` (poolSize is a power of two). This is the only insertion path, so the CPU and GPU never coordinate on the head.
 - **Child queue:** storage buffer with capacity `maxChildren = poolSize / 8`. The agent pass reserves an index with `atomicAdd(childCount, 1)` and writes only if the index < `maxChildren`; children beyond capacity in a step are dropped.
 - **Spawn request buffer:** CPU-uploaded Life spawns for this step, capacity `maxSpawnsPerStep = min(poolSize − maxChildren, 65536)`, so a step never inserts more than `poolSize` actors and no two inserts in a step share a slot.
-- **Food seed buffer:** capacity 128×128 seeds.
+- **Food seed buffer:** capacity one seed per Life cell; resized when the board size changes.
 - **Trail textures:** two `rgba8unorm` 2048×2048 textures (A, B), ping-pong.
 - **Food texture:** one `rgba8unorm` 2048×2048 texture.
 - **Uniforms:** all scalar f32/u32/i32 (no bools; `wrapBounds` is u32, `always_spawn_from_parent` is i32), plus field size, step counter, pool size, `maxChildren` and this step's spawn count. `blurInterval` and `foodFadeInterval` are applied on the CPU when deciding which passes to encode.
@@ -166,7 +166,7 @@ All passes go in one command encoder, submitted once per step. "Current trail" s
    - `blurMultiplier == 0`: `max(0, rgb − fadeDecrement)`
    - otherwise: `max(0, (sum3x3 + center·blurMultiplier) / (blurMultiplier + 9) − fadeDecrement)`, with out-of-bounds neighbours counting as zero (Particles' clamp_to_zero).
    Alpha written as 1. Current trail becomes B. On other steps nothing is copied; current trail stays A.
-3. **Food seed (render).** If there are death seeds: instanced 16×16 quads, additive blend (one/one).
+3. **Food seed (render).** If there are death seeds: instanced cell-block quads, additive blend (one/one).
 4. **Food fade (render).** Only on steps where `step % foodFadeInterval == 0`: fullscreen triangle outputting the constant `(d, d, d, d)` with `d = foodFadeDecrement`, blend operation `reverse-subtract` (one/one), so `food = max(0, food − d)` without reading the texture.
 5. **Agent pass (compute).** For each alive actor, reading the current trail and the food texture:
    1. Move: `pos += speed·(cos dir, sin dir)`.
@@ -198,34 +198,34 @@ Actors leave the pool when evicted by the ring (oldest overwritten) or by death 
 
 ### Parameters
 
-One shared set, all live-editable in the panel. The Particles column gives the effective value in Particles' `config.json` (— where Particles has no equivalent).
+One shared set, all live-editable in the panel. Defaults were tuned by exploration (2026-10-03). The Particles column gives the effective value in Particles' `config.json` (— where Particles has no equivalent).
 
 | Name | Default | Particles | Range |
 |---|---|---|---|
-| `poolSize` | 131072 (2^17) | — | 2^14 – 2^22, powers of two (limited by device, above) |
-| `lookSlices` | 3 | 3 | 1 – 8 |
-| `lookRadians` | 1.0 | 1.0 | 0 – π |
-| `lookDistance` | 10 | 10 | 1 – 64 |
-| `directionRandomization` | 0.1 | 0.1 | 0 – 2 |
-| `directionMomentum` | 0.1 | 0.1 | 0 – 1 |
-| `minSpeed` | 0.3 | 0.3 | 0 – 5 |
-| `maxSpeed` | 2.0 | 2.0 | 0 – 10 |
-| `intensity` | 1.0 | 1.0 | 0 – 2 |
+| `poolSize` | 1048576 (2^20) | — | 2^14 – 2^22, powers of two (limited by device, above) |
+| `lookSlices` | 6 | 3 | 1 – 8 |
+| `lookRadians` | 1.31 | 1.0 | 0 – π |
+| `lookDistance` | 17 | 10 | 1 – 64 |
+| `directionRandomization` | 0.35 | 0.1 | 0 – 2 |
+| `directionMomentum` | 0.25 | 0.1 | 0 – 1 |
+| `minSpeed` | 1.13 | 0.3 | 0 – 5 |
+| `maxSpeed` | 2.81 | 2.0 | 0 – 10 |
+| `intensity` | 0.37 | 1.0 | 0 – 2 |
 | `foodPerDeath` | 0.5 | — | 0 – 1 |
-| `food_exhaustion` | 1.0 (0 disables) | 2.0 (different formula) | 0 – 1 |
+| `food_exhaustion` | 0 (disabled; 0 disables) | 2.0 (different formula) | 0 – 1 |
 | `food_sensitivity` | 0.1 | 0.1 (different formula) | 0 – 2 |
 | `life` | 20000 (steps) | 10000 + 10000 | 1 – 100000 |
 | `always_spawn_from_parent` | 1 | 1 | -1, 0, 1 |
 | `spawnRandomOffset` | 1.0 | 1.0 | 0 – 16 |
-| `spawnProbability` | 0.0001 | — (parsed, unused) | 0 – 0.05 |
-| `directionVariance` | π/4 | ±π/4 (CPU parent spawns) | 0 – π |
+| `spawnProbability` | 0.0134 | — (parsed, unused) | 0 – 0.05 |
+| `directionVariance` | 1.65 | ±π/4 (CPU parent spawns) | 0 – π |
 | `speedVariance` | 0.1 | — | 0 – 1 |
 | `lock_to_hsv_angles` | 0 | 0 | 0 – 12 (integer) |
 | `hsv_angle_offset` | 1.0 | 1.0 | 0 – 1 |
 | `hsv_saturation_multiplier` | 1 | 1 | 0 – 2 |
 | `hsv_value_multiplier` | 1 | 1 | 0 – 2 |
-| `fadeDecrement` (trail) | 0.01 | 0.01 | 0 – 0.1 |
-| `blurMultiplier` | 0 | 0 | 0 – 16 |
+| `fadeDecrement` (trail) | 0.001 | 0.01 | 0 – 0.1 |
+| `blurMultiplier` | 10.6 | 0 | 0 – 16 |
 | `blurInterval` | 1 | 1 | 1 – 10 |
 | `foodFadeDecrement` | 0.002 | 0.01 (RGB only) | 0 – 0.1 |
 | `foodFadeInterval` | 1 | 1 | 1 – 10 |
@@ -240,16 +240,16 @@ Changing `poolSize` reallocates the actor, child and spawn buffers, resets the c
 
 - The Physarum field is 2048×2048. The canvas displays it scaled to fit the window (square, aspect preserved, linear filtering when downscaling).
 - Composite order over black: Physarum layer (trail RGB, or food RGB in food view; alpha ignored) × `physarumOpacity`, then Life cells mixed in with `lifeOpacity`, then the placement ghost.
-- Life cells: 16×16-field-pixel squares in their organism's color.
+- Life cells: cell-block squares (2048 / board size field pixels on a side) in their organism's color.
 - Placement ghost: translucent preview of the selected pattern (or the single paint cell) at the cursor, clipped to the board.
 
 ## UI
 
 lil-gui panel folders:
 
-- **Layers:** `lifeOpacity` (default 0.6), `physarumOpacity` (default 1.0), food view toggle (also key **T**, as in Particles) that shows the food texture in place of the trail.
-- **Life:** play/pause, step, clear, random fill + density (default 0.2), tick rate (default 1 Hz, range 0.25 – 8 Hz).
-- **Bridge:** `actorsPerBirth` (default 16, range 0 – 256), spawn mode (burst / trickle).
+- **Layers:** `lifeOpacity` (default 0.05), `physarumOpacity` (default 1.0), food view toggle (also key **T**, as in Particles) that shows the food texture in place of the trail.
+- **Life:** play/pause, step, clear, random fill + density (default 0.2), tick rate (default 7.5 Hz, range 0.25 – 8 Hz), board size (64, 128, 256, 512 or 1024; default 64; also `?size=N`). Changing the board size starts an empty board and clears the food map and pending food; actors and trail stay.
+- **Bridge:** `actorsPerBirth` (default 129, range 0 – 256), spawn mode (burst / trickle, default trickle).
 - **Physarum:** all parameters above, grouped (Sensing, Movement, Deposit & Color, Food, Fade, Reproduction & Lifecycle, World); buttons: clear trail, clear food, clear actors.
 - **Readouts:** fps, Physarum steps/s, alive actors, organism count, inserts/s from Life vs from reproduction.
 
@@ -275,7 +275,7 @@ TDD throughout. All three test types are required.
 - Palette: new organism gets a palette color; color persists with id; split fragments get new colors; merge keeps the dominant id's color; seeded determinism.
 - World: births colored by their new organism; deaths colored by their previous-tick organism; edits produce no births/deaths.
 - Death food: each death produces one food-seed request with its color and block.
-- Spawner: positions within the 16×16 block; count = births × `actorsPerBirth`; color = organism color; burst puts all on one step; trickle distributes across steps with total preserved; leftovers survive a new tick; per-step cap spills into later steps; queue cap drops the oldest.
+- Spawner: positions within the cell block; count = births × `actorsPerBirth`; color = organism color; burst puts all on one step; trickle distributes across steps with total preserved; leftovers survive a new tick; per-step cap spills into later steps; queue cap drops the oldest.
 - CPU reference math (`src/color.ts`): `rgb2hsv`/`hsv2rgb`, `hsv_mix` wrap cases (0.9, 0.1, 0.25 → 0.95; 0.1, 0.9, 0.25 → 0.05), `hsv_distance`, `dominant_color` (no fold); parameter and actor packing layouts.
 - Clocks: fixed-step accumulation and catch-up cap.
 
@@ -285,7 +285,7 @@ TDD throughout. All three test types are required.
 - Agent pass: single-actor move; out-of-bounds wrap vs kill; age/life death; respawn modes; sensing turns toward matching-hue trail; food steering prefers matching-hue food; exhaustion at alpha 255 with threshold 1.0 kills and at alpha 128 with threshold 1.0 does not; reproduction with `spawnProbability = 1` adds `min(alive, maxChildren)` children and `= 0` adds none; deposit color matches `hsv_mix`.
 - Diffuse/fade: known input texture → expected output for both blur modes.
 - Deposit: an actor at a fractional position colors exactly pixel `floor(pos)` (no y flip mismatch); dead slots draw nothing.
-- Food: a death quad adds `color·foodPerDeath` / `foodPerDeath` alpha over exactly the 16×16 block; fade subtracts and clamps at 0.
+- Food: a death quad adds `color·foodPerDeath` / `foodPerDeath` alpha over exactly the cell block; fade subtracts and clamps at 0.
 - Simulation step: spawns become alive; ring overflow keeps alive ≤ poolSize; pool resize resets counts.
 
 **End-to-end (Playwright, Chrome with WebGPU):**

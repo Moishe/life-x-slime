@@ -8,9 +8,12 @@ import { actor, getDevice, readBuffer, setPixel, solidTexels, writeTexture } fro
 
 const W = 64;
 // Deterministic baseline: no randomness in turning, no reproduction, no food.
+// Sensor geometry is pinned (3 slices, 1 radian, distance 10) because the
+// sensing tests place pixels at those sensor positions.
 const BASE: Partial<PhysarumParams> = {
   directionRandomization: 0, spawnProbability: 0, foodSensitivity: 0, foodExhaustion: 0,
   minSpeed: 0, maxSpeed: 0, alwaysSpawnFromParent: -1,
+  lookSlices: 3, lookRadians: 1, lookDistance: 10,
 };
 
 async function runAgent(actors: ActorRecord[], overrides: Partial<PhysarumParams>, opts: { trail?: Uint8Array; food?: Uint8Array; maxChildren?: number } = {}) {
