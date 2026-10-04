@@ -11,6 +11,9 @@ import { buildPatternBar, type Tool } from './ui/pattern-bar';
 import { cellFromPointer, ghostCells } from './ui/placement';
 import { downloadBlob, encodePng, snapshotFilenames } from './ui/export-images';
 import { createReadouts } from './ui/readouts';
+import { chooseMovieConfig, movieFilename, movieNotice, recordingStatus } from './record/movie-config';
+import { canEncodeVideo } from 'mediabunny';
+import type { Controller } from 'lil-gui';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#field')!;
 const message = document.querySelector<HTMLDivElement>('#message')!;
@@ -42,6 +45,58 @@ function saveSettingsFile(app: App): void {
   downloadBlob(new Blob([serializeSettings(app.settings, app.sim.params)], { type: 'application/json' }), SETTINGS_FILENAME);
 }
 
+const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+// Start/end recording, keeping the two buttons' enabled state in step.
+function createMovieControls(app: App, startButton: Controller, endButton: Controller) {
+  let startedAt = new Date();
+
+  const reset = () => {
+    startButton.enable();
+    endButton.disable();
+  };
+
+  app.onRecordingError = error => {
+    reset();
+    showMessage(`Recording stopped: ${errorText(error)}`, 'close');
+  };
+
+  return {
+    async start(): Promise<void> {
+      if (!('VideoEncoder' in window)) {
+        showMessage('This browser cannot record video.', 'close');
+        return;
+      }
+      startButton.disable();
+      try {
+        const config = await chooseMovieConfig((codec, size, bitrate) => canEncodeVideo(codec, { width: size, height: size, bitrate }));
+        if (!config) {
+          showMessage('This browser cannot record video.', 'close');
+          reset();
+          return;
+        }
+        const notice = movieNotice(config);
+        if (notice) showMessage(notice, 'close');
+        startedAt = new Date();
+        await app.startRecording(config);
+        endButton.enable();
+      } catch (error) {
+        reset();
+        showMessage(`Could not start recording: ${errorText(error)}`, 'close');
+      }
+    },
+    async end(): Promise<void> {
+      endButton.disable();
+      try {
+        downloadBlob(await app.finishRecording(), movieFilename(startedAt));
+      } catch (error) {
+        showMessage(`Could not finish the movie: ${errorText(error)}`, 'close');
+      }
+      reset();
+    },
+  };
+}
+
 // Downloads the Life layer, the Physarum trail and their mix as three PNGs.
 async function saveImages(app: App): Promise<void> {
   try {
@@ -51,7 +106,7 @@ async function saveImages(app: App): Promise<void> {
       downloadBlob(await encodePng(images[part], FIELD_SIZE), names[part]);
     }
   } catch (error) {
-    showMessage(`Could not save images: ${error instanceof Error ? error.message : String(error)}`, 'close');
+    showMessage(`Could not save images: ${errorText(error)}`, 'close');
   }
 }
 
@@ -102,8 +157,13 @@ function attachUi(app: App, poolSizes: number[]): void {
     seedChanged: seed => app.reseed(seed),
     saveSettings: () => saveSettingsFile(app),
     saveImages: () => void saveImages(app),
+    startRecording: () => void movie.start(),
+    endRecording: () => void movie.end(),
     loadSettings: () => loadSettingsFile(app, poolSizes, () => gui.controllersRecursive().forEach(c => c.updateDisplay())),
   });
+
+  const button = (property: string) => gui.controllersRecursive().find(c => c.property === property)!;
+  const movie = createMovieControls(app, button('startRecording'), button('endRecording'));
 
   let tool: Tool = { kind: 'paint' };
   let quarterTurns = 0;
@@ -162,6 +222,7 @@ function attachUi(app: App, poolSizes: number[]): void {
         organisms: app.world.organismCount(),
         lifeInsertsPerSec: app.stats.lifeInserts.sample(now),
         childInsertsPerSec: app.stats.childInserts.sample(now),
+        recording: recordingStatus(app.recordedFrames),
       });
     } catch (error) {
       clearInterval(readoutTimer);

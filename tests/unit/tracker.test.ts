@@ -130,6 +130,8 @@ describe('ClusterTracker at large board sizes', () => {
     engine.tick();
     const start = performance.now();
     t.update(engine.liveCells());
-    expect(performance.now() - start).toBeLessThan(250);
+    // Typically 50-70 ms; the previous all-pairs overlap matching took over 1 s.
+    // The bound leaves headroom for test files running in parallel.
+    expect(performance.now() - start).toBeLessThan(600);
   });
 });

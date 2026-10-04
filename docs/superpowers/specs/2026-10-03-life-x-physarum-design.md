@@ -257,6 +257,14 @@ Pattern placement (ported from life-ambient): a palette of the 14 patterns group
 
 Organism count comes from the CPU tracker. Alive actors and children inserted come from the GPU counters buffer, read back asynchronously (a 16-byte `mapAsync`, at most ~4 times per second, skipped while a read is pending) so it never stalls the frame loop.
 
+## Movie recording
+
+- Panel buttons "start recording" and "end recording" (only the applicable one is enabled). A "recording" readout shows movie time and frame count, or "off".
+- Content: the mix (trail × `physarumOpacity`, Life × `lifeOpacity`, no placement ghost) rendered into an offscreen WebGPU canvas at the movie size and captured as a `VideoFrame` after every Physarum step.
+- Pacing while recording: one video frame per Physarum step at 30 fps; Life ticks every `round(30 / lifeHz)` steps instead of by wall clock. If the encoder has more than 3 frames queued, Physarum steps are skipped (the live view slows) rather than dropping frames. Normal wall-clock pacing resumes when recording ends.
+- Encoding: WebCodecs via Mediabunny into an in-memory MP4. Preference order: H.264 2048 (20 Mbit/s), H.264 1024 (8 Mbit/s), VP9 2048, VP9 1024; a fallback is announced in the message box, and a browser that can't encode video gets "This browser cannot record video."
+- End downloads `life-x-physarum-<start timestamp>.mp4`. Encoder failures stop the recording with a message.
+
 ## Error handling
 
 - No `navigator.gpu` or no adapter/device: show a clear "WebGPU not available" message in place of the canvas; do not start.

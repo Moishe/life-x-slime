@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { FixedStepClock } from '../../src/app/clock';
+import { FixedStepClock, StepTicker } from '../../src/app/clock';
 
 describe('FixedStepClock', () => {
   it('emits one step per period, carrying the remainder', () => {
@@ -26,5 +26,26 @@ describe('FixedStepClock', () => {
     c.advance(90);
     c.reset();
     expect(c.advance(20)).toBe(0);
+  });
+});
+
+describe('StepTicker', () => {
+  it('ticks once every stepsPerTick steps', () => {
+    const t = new StepTicker();
+    const ticks = Array.from({ length: 9 }, () => t.step(4));
+    expect(ticks).toEqual([false, false, false, true, false, false, false, true, false]);
+  });
+
+  it('ticks every step when stepsPerTick is 1', () => {
+    const t = new StepTicker();
+    expect([t.step(1), t.step(1)]).toEqual([true, true]);
+  });
+
+  it('reset() starts counting again', () => {
+    const t = new StepTicker();
+    t.step(3);
+    t.step(3);
+    t.reset();
+    expect([t.step(3), t.step(3), t.step(3)]).toEqual([false, false, true]);
   });
 });

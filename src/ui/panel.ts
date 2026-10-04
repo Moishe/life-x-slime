@@ -16,6 +16,8 @@ export interface PanelActions {
   saveSettings(): void;
   loadSettings(): void;
   saveImages(): void;
+  startRecording(): void;
+  endRecording(): void;
 }
 
 // The lil-gui control panel. Controls write straight into settings/params,
@@ -25,6 +27,8 @@ export function buildPanel(settings: AppSettings, params: PhysarumParams, poolSi
   gui.add(actions, 'saveSettings').name('save settings');
   gui.add(actions, 'loadSettings').name('load settings');
   gui.add(actions, 'saveImages').name('save images');
+  gui.add(actions, 'startRecording').name('start recording');
+  gui.add(actions, 'endRecording').name('end recording').disable();
 
   const layers = gui.addFolder('Layers');
   layers.add(settings, 'lifeOpacity', 0, 1, 0.01);

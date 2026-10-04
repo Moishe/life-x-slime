@@ -5,6 +5,7 @@ export interface ReadoutValues {
   organisms: number;
   lifeInsertsPerSec: number;
   childInsertsPerSec: number;
+  recording: string;
 }
 
 const ROWS: [keyof ReadoutValues, string, string][] = [
@@ -14,6 +15,7 @@ const ROWS: [keyof ReadoutValues, string, string][] = [
   ['organisms', 'organisms', 'readout-organisms'],
   ['lifeInsertsPerSec', 'inserts/s from Life', 'readout-life-inserts'],
   ['childInsertsPerSec', 'inserts/s from children', 'readout-child-inserts'],
+  ['recording', 'recording', 'readout-recording'],
 ];
 
 // Builds the readout rows; returns a function that updates them.
@@ -31,6 +33,9 @@ export function createReadouts(root: HTMLElement): (values: ReadoutValues) => vo
     cells.set(key, value);
   }
   return values => {
-    for (const [key] of ROWS) cells.get(key)!.textContent = String(Math.round(values[key]));
+    for (const [key] of ROWS) {
+      const value = values[key];
+      cells.get(key)!.textContent = typeof value === 'number' ? String(Math.round(value)) : value;
+    }
   };
 }

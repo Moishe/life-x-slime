@@ -14,7 +14,8 @@
     "test:all": "npm run typecheck && npm test && npm run test:gpu && npm run test:e2e"
   },
   "dependencies": {
-    "lil-gui": "^0.21.0"
+    "lil-gui": "^0.21.0",
+    "mediabunny": "^1.61.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

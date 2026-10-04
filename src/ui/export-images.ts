@@ -6,12 +6,17 @@ export interface SnapshotFilenames {
 
 const twoDigits = (n: number): string => String(n).padStart(2, '0');
 
-// File names for one snapshot, sharing a local-time stamp so the three sort together.
-export function snapshotFilenames(when: Date): SnapshotFilenames {
-  const stamp = [
+// Local-time stamp used in exported file names, e.g. 2026-10-03-19-30-12.
+export function exportTimestamp(when: Date): string {
+  return [
     when.getFullYear(), twoDigits(when.getMonth() + 1), twoDigits(when.getDate()),
     twoDigits(when.getHours()), twoDigits(when.getMinutes()), twoDigits(when.getSeconds()),
   ].join('-');
+}
+
+// File names for one snapshot, sharing a local-time stamp so the three sort together.
+export function snapshotFilenames(when: Date): SnapshotFilenames {
+  const stamp = exportTimestamp(when);
   const name = (part: string) => `life-x-physarum-${stamp}-${part}.png`;
   return { life: name('life'), physarum: name('physarum'), mix: name('mix') };
 }

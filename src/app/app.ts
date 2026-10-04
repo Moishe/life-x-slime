@@ -1,4 +1,4 @@
-import { FixedStepClock } from './clock';
+import { FixedStepClock, StepTicker } from './clock';
 import { RateMeter } from './rates';
 import { DEFAULT_SETTINGS, FIELD_SIZE, PHYSARUM_HZ, cellSizeFor, type AppSettings } from './settings';
 import { SpawnScheduler, birthsToActors, deathsToFoodSeeds } from '../bridge/spawner';
@@ -11,6 +11,8 @@ import { captureImage } from '../render/snapshot';
 import { ghostTexels, lifeTexels } from '../render/texels';
 import { mulberry32, type Rng } from '../rng';
 import type { LoadedSettings } from './settings-file';
+import type { MovieConfig } from '../record/movie-config';
+import { MovieRecorder } from '../record/recorder';
 
 // Owns the simulations and clocks, and draws each frame.
 export class App {
@@ -24,6 +26,8 @@ export class App {
     childInserts: new RateMeter(),
   };
   alive = 0;
+  // Called if the movie encoder fails mid-recording; the recording is abandoned.
+  onRecordingError: (error: unknown) => void = () => {};
 
   private readonly scheduler: SpawnScheduler;
   private readonly compositor: Compositor;
@@ -37,6 +41,8 @@ export class App {
   private lifeDirty = true;
   private ghost: Cell[] = [];
   private ghostDirty = true;
+  private recorder: MovieRecorder | null = null;
+  private readonly recordingLifeTicker = new StepTicker();
 
   constructor(
     private readonly device: GPUDevice,
@@ -56,6 +62,31 @@ export class App {
   }
 
   frame(dtMs: number): void {
+    if (this.recorder) this.recordingFrame(dtMs);
+    else this.liveFrame(dtMs);
+    this.render();
+    this.stats.frames.add();
+  }
+
+  get recordedFrames(): number | null {
+    return this.recorder?.frameCount ?? null;
+  }
+
+  async startRecording(config: MovieConfig): Promise<void> {
+    this.recorder = await MovieRecorder.start(this.device, this.compositor, config);
+    this.recordingLifeTicker.reset();
+  }
+
+  async finishRecording(): Promise<Blob> {
+    const recorder = this.recorder!;
+    this.recorder = null;
+    this.lifeClock.reset();
+    this.physClock.reset();
+    return recorder.finish();
+  }
+
+  // Wall-clock pacing: Life and Physarum each follow their own clock.
+  private liveFrame(dtMs: number): void {
     this.lifeClock.hz = this.settings.lifeHz;
     if (this.settings.playing) {
       for (let n = this.lifeClock.advance(dtMs); n > 0; n--) this.lifeTick();
@@ -63,8 +94,32 @@ export class App {
       this.lifeClock.reset();
     }
     for (let n = this.physClock.advance(dtMs); n > 0; n--) this.physStep();
-    this.render();
-    this.stats.frames.add();
+  }
+
+  // Movie pacing: every Physarum step becomes one frame, and Life ticks every
+  // stepsPerLifeTick() steps, so the movie runs at the simulation's own speed.
+  // While the encoder is behind, steps are skipped rather than frames dropped.
+  private recordingFrame(dtMs: number): void {
+    const recorder = this.recorder!;
+    let steps = this.physClock.advance(dtMs);
+    for (; steps > 0 && !recorder.busy; steps--) {
+      if (this.settings.playing && this.recordingLifeTicker.step(this.stepsPerLifeTick())) this.lifeTick();
+      this.physStep();
+      this.refreshCellTextures();
+      try {
+        recorder.addFrame(this.sim.trail, this.settings.physarumOpacity, this.settings.lifeOpacity);
+      } catch (error) {
+        this.recorder = null;
+        void recorder.cancel();
+        this.onRecordingError(error);
+        return;
+      }
+    }
+    if (steps > 0) this.physClock.reset();
+  }
+
+  private stepsPerLifeTick(): number {
+    return Math.max(1, Math.round(PHYSARUM_HZ / this.settings.lifeHz));
   }
 
   // One Life generation; queues its spawns and food for the next Physarum steps.
@@ -76,7 +131,7 @@ export class App {
       this.rng,
       this.settings.poolSize,
     );
-    this.scheduler.enqueue(actors, Math.max(1, Math.round(PHYSARUM_HZ / this.settings.lifeHz)));
+    this.scheduler.enqueue(actors, this.stepsPerLifeTick());
     this.pendingSeeds = this.pendingSeeds.concat(deathsToFoodSeeds(result.deaths));
     this.lifeDirty = true;
   }

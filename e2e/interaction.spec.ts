@@ -259,3 +259,29 @@ test('save images downloads the Life, Physarum and mixed images at full size', a
   // Mix image: Life at the panel's 0.6 opacity over the empty trail.
   at(mix, 61, 60).forEach((v, i) => expect(Math.abs(v - Math.round(cell[i] * 0.6))).toBeLessThanOrEqual(2));
 });
+
+test('recording downloads an MP4 and toggles the start and end buttons', async ({ page }) => {
+  await boot(page, 128);
+  const start = page.getByRole('button', { name: 'start recording' });
+  const end = page.getByRole('button', { name: 'end recording' });
+  await expect(start).toBeEnabled();
+  await expect(end).toBeDisabled();
+  await expect(page.getByTestId('readout-recording')).toHaveText('off');
+
+  await start.click();
+  await expect(end).toBeEnabled();
+  await expect(start).toBeDisabled();
+  await expect(page.getByTestId('readout-recording')).toHaveText(/^\d+\.\d s \(\d+ frames\)$/);
+  await page.waitForTimeout(1000);
+
+  const downloadPromise = page.waitForEvent('download');
+  await end.click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^life-x-physarum-\d{4}(-\d{2}){5}\.mp4$/);
+  const bytes = await readFile(await download.path());
+  expect(bytes.length).toBeGreaterThan(1000);
+  expect(bytes.subarray(4, 8).toString('latin1')).toBe('ftyp');
+  await expect(start).toBeEnabled();
+  await expect(end).toBeDisabled();
+  await expect(page.getByTestId('readout-recording')).toHaveText('off');
+});

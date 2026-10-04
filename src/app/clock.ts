@@ -25,3 +25,20 @@ export class FixedStepClock {
     this.accumulatorMs = 0;
   }
 }
+
+// Counts fixed steps and reports when a tick is due. Used to drive Life from
+// Physarum steps (rather than the wall clock) while recording a movie.
+export class StepTicker {
+  private steps = 0;
+
+  step(stepsPerTick: number): boolean {
+    this.steps++;
+    if (this.steps < stepsPerTick) return false;
+    this.steps = 0;
+    return true;
+  }
+
+  reset(): void {
+    this.steps = 0;
+  }
+}
