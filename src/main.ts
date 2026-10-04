@@ -1,6 +1,7 @@
 import './style.css';
 import { App } from './app/app';
 import { DEFAULT_SETTINGS, seedFromUrl, sizeFromUrl } from './app/settings';
+import { parseSettings, serializeSettings } from './app/settings-file';
 import { initGpu } from './gpu/device';
 import { onShaderError } from './gpu/shader';
 import type { Cell } from './life/engine';
@@ -13,17 +14,57 @@ import { createReadouts } from './ui/readouts';
 const canvas = document.querySelector<HTMLCanvasElement>('#field')!;
 const message = document.querySelector<HTMLDivElement>('#message')!;
 
-function showMessage(text: string, offerReload = false): void {
+// Shows a message over the canvas. Fatal problems offer Reload; recoverable
+// ones (like a bad settings file) offer Close.
+function showMessage(text: string, action: 'none' | 'reload' | 'close' = 'none'): void {
   // Append when already visible so several errors can all be read.
   if (message.hidden) message.textContent = text;
   else message.append('\n', text);
   message.hidden = false;
-  if (offerReload) {
-    const button = document.createElement('button');
-    button.textContent = 'Reload';
-    button.addEventListener('click', () => location.reload());
-    message.append(' ', button);
-  }
+  if (action === 'none') return;
+  const button = document.createElement('button');
+  button.textContent = action === 'reload' ? 'Reload' : 'Close';
+  button.addEventListener('click', () => {
+    if (action === 'reload') {
+      location.reload();
+    } else {
+      message.hidden = true;
+      message.textContent = '';
+    }
+  });
+  message.append(' ', button);
+}
+
+const SETTINGS_FILENAME = 'life-x-physarum-settings.json';
+
+function saveSettingsFile(app: App): void {
+  const blob = new Blob([serializeSettings(app.settings, app.sim.params)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = SETTINGS_FILENAME;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+// Asks for a settings file, applies it, and calls `onApplied` so the panel can refresh.
+function loadSettingsFile(app: App, poolSizes: number[], onApplied: () => void): void {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const loaded = parseSettings(await file.text(), poolSizes);
+      app.applySettings(loaded);
+      onApplied();
+      if (loaded.warnings.length > 0) showMessage(`Loaded ${file.name} with problems:\n${loaded.warnings.join('\n')}`, 'close');
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : String(error), 'close');
+    }
+  });
+  input.click();
 }
 
 // Keeps the canvas backing store matched to its on-screen size (max 2048).
@@ -51,6 +92,8 @@ function attachUi(app: App, poolSizes: number[]): void {
     poolSizeChanged: n => app.setPoolSize(n),
     lifeSizeChanged: n => app.setLifeSize(n),
     seedChanged: seed => app.reseed(seed),
+    saveSettings: () => saveSettingsFile(app),
+    loadSettings: () => loadSettingsFile(app, poolSizes, () => gui.controllersRecursive().forEach(c => c.updateDisplay())),
   });
 
   let tool: Tool = { kind: 'paint' };
@@ -129,7 +172,7 @@ async function start(): Promise<void> {
   const { device } = gpu;
   device.addEventListener('uncapturederror', event => console.error((event as GPUUncapturedErrorEvent).error.message));
   void device.lost.then(info => {
-    if (info.reason !== 'destroyed') showMessage(`The GPU device was lost: ${info.message}`, true);
+    if (info.reason !== 'destroyed') showMessage(`The GPU device was lost: ${info.message}`, 'reload');
   });
 
   const context = canvas.getContext('webgpu')!;

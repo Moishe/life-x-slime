@@ -9,6 +9,7 @@ import { PhysarumSim } from '../physarum/simulation';
 import { Compositor } from '../render/compositor';
 import { ghostTexels, lifeTexels } from '../render/texels';
 import { mulberry32, type Rng } from '../rng';
+import type { LoadedSettings } from './settings-file';
 
 // Owns the simulations and clocks, and draws each frame.
 export class App {
@@ -101,6 +102,18 @@ export class App {
     this.ghost = [];
     this.lifeDirty = true;
     this.ghostDirty = true;
+  }
+
+  // Applies values read from a settings file. Board and pool size go through
+  // setLifeSize/setPoolSize, so they clear the board or actors as the panel does.
+  applySettings(loaded: LoadedSettings): void {
+    const { lifeSize, poolSize, ...plain } = loaded.settings;
+    Object.assign(this.settings, plain);
+    if (lifeSize !== undefined && lifeSize !== this.settings.lifeSize) this.setLifeSize(lifeSize);
+    if (poolSize !== undefined && poolSize !== this.settings.poolSize) this.setPoolSize(poolSize);
+    const seedChanged = loaded.physarum.rngSeed !== undefined && loaded.physarum.rngSeed !== this.sim.params.rngSeed;
+    Object.assign(this.sim.params, loaded.physarum);
+    if (seedChanged) this.reseed(this.sim.params.rngSeed);
   }
 
   setPoolSize(poolSize: number): void {

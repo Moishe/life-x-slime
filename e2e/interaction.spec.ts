@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { PNG } from 'pngjs';
 
 const PALETTE_HUES = [0, 45, 90, 135, 180, 225, 270, 315];
@@ -173,4 +174,46 @@ test('starts at 64x64 and keeps running with a randomly filled board', async ({ 
   expect(Number(await page.getByTestId('readout-fps').textContent())).toBeGreaterThan(10);
   expect(Number(await page.getByTestId('readout-steps').textContent())).toBeGreaterThan(10);
   await expect.poll(alive(page), { timeout: 5000 }).toBeGreaterThan(0);
+});
+
+test('save settings downloads the current panel values', async ({ page }) => {
+  await boot(page, 128);
+  await setNumber(page, 'lookDistance', 23);
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'save settings' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('life-x-physarum-settings.json');
+  const data = JSON.parse(await readFile(await download.path(), 'utf8'));
+  expect(data.version).toBe(1);
+  expect(data.physarum.lookDistance).toBe(23);
+  expect(data.settings.lifeSize).toBe(128);
+  expect(data.settings.lifeOpacity).toBe(0.6);
+  expect(data.settings).not.toHaveProperty('playing');
+});
+
+async function loadSettingsFile(page: Page, contents: string): Promise<void> {
+  const chooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'load settings' }).click();
+  const chooser = await chooserPromise;
+  await chooser.setFiles({ name: 'settings.json', mimeType: 'application/json', buffer: Buffer.from(contents) });
+}
+
+test('load settings applies the file to the panel and the board', async ({ page }) => {
+  await boot(page, 128);
+  await page.getByRole('button', { name: 'Glider', exact: true }).click();
+  await clickCell(page, 60, 60);
+  await expect(page.getByTestId('readout-organisms')).toHaveText('1');
+  await loadSettingsFile(page, JSON.stringify({ version: 1, settings: { lifeSize: 256 }, physarum: { lookDistance: 33 } }));
+  await expect(page.locator('.lil-controller', { hasText: 'lookDistance' }).locator('input')).toHaveValue('33');
+  await expect(page.getByTestId('board-size').locator('select option:checked')).toHaveText('256');
+  await expect(page.getByTestId('readout-organisms')).toHaveText('0');
+  await expect(page.locator('#message')).toBeHidden();
+});
+
+test('loading a bad settings file shows a message that can be closed', async ({ page }) => {
+  await boot(page, 128);
+  await loadSettingsFile(page, 'not json {');
+  await expect(page.locator('#message')).toContainText('This file is not a Life x Physarum settings file.');
+  await page.locator('#message').getByRole('button', { name: 'Close' }).click();
+  await expect(page.locator('#message')).toBeHidden();
 });

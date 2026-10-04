@@ -13,12 +13,16 @@ export interface PanelActions {
   poolSizeChanged(poolSize: number): void;
   lifeSizeChanged(lifeSize: number): void;
   seedChanged(seed: number): void;
+  saveSettings(): void;
+  loadSettings(): void;
 }
 
 // The lil-gui control panel. Controls write straight into settings/params,
 // which the app reads every frame/step.
 export function buildPanel(settings: AppSettings, params: PhysarumParams, poolSizes: number[], actions: PanelActions): GUI {
   const gui = new GUI({ title: 'Life x Physarum' });
+  gui.add(actions, 'saveSettings').name('save settings');
+  gui.add(actions, 'loadSettings').name('load settings');
 
   const layers = gui.addFolder('Layers');
   layers.add(settings, 'lifeOpacity', 0, 1, 0.01);
