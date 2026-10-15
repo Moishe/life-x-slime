@@ -40,6 +40,13 @@ describe('movieNotice', () => {
       'Recording as VP9: this browser has no H.264 encoder, so some players (such as QuickTime) may not play the movie.',
     );
   });
+
+  it('reports both fallbacks for VP9 at 1024', () => {
+    expect(movieNotice({ codec: 'vp9', size: 1024, bitrate: 8_000_000 })).toBe(
+      'Recording as VP9: this browser has no H.264 encoder, so some players (such as QuickTime) may not play the movie.\n'
+      + 'Recording at 1024×1024: this browser cannot encode 2048×2048 video.',
+    );
+  });
 });
 
 describe('movieFilename', () => {

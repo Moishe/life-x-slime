@@ -124,7 +124,7 @@ function loadSettingsFile(app: App, poolSizes: number[], onApplied: () => void):
       onApplied();
       if (loaded.warnings.length > 0) showMessage(`Loaded ${file.name} with problems:\n${loaded.warnings.join('\n')}`, 'close');
     } catch (error) {
-      showMessage(error instanceof Error ? error.message : String(error), 'close');
+      showMessage(errorText(error), 'close');
     }
   });
   input.click();
@@ -262,7 +262,7 @@ async function start(): Promise<void> {
     try {
       app.frame(now - last);
     } catch (error) {
-      showMessage(`Rendering stopped: ${error instanceof Error ? error.message : String(error)}`);
+      showMessage(`Rendering stopped: ${errorText(error)}`);
       return;
     }
     last = now;
@@ -272,4 +272,4 @@ async function start(): Promise<void> {
   requestAnimationFrame(loop);
 }
 
-start().catch(error => showMessage(`Failed to start: ${error instanceof Error ? error.message : String(error)}`));
+start().catch(error => showMessage(`Failed to start: ${errorText(error)}`));

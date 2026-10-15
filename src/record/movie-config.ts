@@ -31,11 +31,12 @@ export async function chooseMovieConfig(canEncode: CanEncode): Promise<MovieConf
 
 // A note for the user when the movie won't be full-size H.264.
 export function movieNotice(config: MovieConfig): string | null {
+  const notes: string[] = [];
   if (config.codec !== 'avc') {
-    return 'Recording as VP9: this browser has no H.264 encoder, so some players (such as QuickTime) may not play the movie.';
+    notes.push('Recording as VP9: this browser has no H.264 encoder, so some players (such as QuickTime) may not play the movie.');
   }
-  if (config.size !== 2048) return `Recording at ${config.size}×${config.size}: this browser cannot encode 2048×2048 video.`;
-  return null;
+  if (config.size !== 2048) notes.push(`Recording at ${config.size}×${config.size}: this browser cannot encode 2048×2048 video.`);
+  return notes.length > 0 ? notes.join('\n') : null;
 }
 
 export function movieFilename(when: Date): string {

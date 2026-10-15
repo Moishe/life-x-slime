@@ -72,9 +72,10 @@ export class MovieRecorder {
     return new Blob([this.output.target.buffer!], { type: 'video/mp4' });
   }
 
-  // Abandons the recording and releases the encoder.
+  // Abandons the recording and releases the encoder. Best effort: callers
+  // fire and forget it, so a failing encoder must not surface as an unhandled rejection.
   async cancel(): Promise<void> {
     await this.queue;
-    await this.output.cancel();
+    await this.output.cancel().catch(() => {});
   }
 }
