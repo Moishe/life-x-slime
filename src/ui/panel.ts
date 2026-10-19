@@ -66,6 +66,7 @@ export function buildPanel(settings: AppSettings, params: PhysarumParams, poolSi
 
   const deposit = physarum.addFolder('Deposit & Color');
   deposit.add(params, 'intensity', 0, 2, 0.01);
+  deposit.add(params, 'minValue', 0, 1, 0.01).name('minValue (0 = off)');
   deposit.add(params, 'lockToHsvAngles', 0, 12, 1);
   deposit.add(params, 'hsvAngleOffset', 0, 1, 0.01);
   deposit.add(params, 'hsvSaturationMultiplier', 0, 2, 0.01);
@@ -85,6 +86,7 @@ export function buildPanel(settings: AppSettings, params: PhysarumParams, poolSi
 
   const lifecycle = physarum.addFolder('Reproduction & Lifecycle');
   lifecycle.add(params, 'spawnProbability', 0, 0.05, 0.0001);
+  lifecycle.add(params, 'crowdingLimit', 0, 64, 1).name('crowdingLimit (0 = off)');
   lifecycle.add(params, 'directionVariance', 0, Math.PI, 0.01);
   lifecycle.add(params, 'speedVariance', 0, 1, 0.01);
   lifecycle.add(params, 'spawnRandomOffset', 0, 16, 0.1);

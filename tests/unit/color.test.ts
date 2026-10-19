@@ -52,6 +52,16 @@ describe('hsvMix', () => {
   it('returns the second color at d = 1', () => {
     close(hsvMix([0, 0, 1], [1, 0, 0], 1), [1, 0, 0], 4);
   });
+
+  it('keeps the hue of a color mixed with black or grey (no pull toward red)', () => {
+    expect(hueOf(hsvMix([0, 0, 0], hsv2rgb([0.25, 1, 1]), 0.37))).toBeCloseTo(0.25, 4);
+    expect(hueOf(hsvMix(hsv2rgb([0.6, 1, 1]), [0.5, 0.5, 0.5], 0.5))).toBeCloseTo(0.6, 4);
+  });
+
+  it('weights hue by chroma between two colors', () => {
+    // Equal d, but the dim blue has a quarter of the chroma: hue lands 1/5 of the way to it.
+    expect(hueOf(hsvMix(hsv2rgb([0.2, 1, 1]), hsv2rgb([0.4, 0.5, 0.5]), 0.5))).toBeCloseTo(0.24, 4);
+  });
 });
 
 describe('dominantColor', () => {

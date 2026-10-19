@@ -16,7 +16,7 @@ struct Actor {
   rng: u32,
 }
 
-// Must match packSimParams in src/physarum/params.ts (112 bytes).
+// Must match packSimParams in src/physarum/params.ts (128 bytes).
 struct SimParams {
   width: f32,
   height: f32,
@@ -45,7 +45,11 @@ struct SimParams {
   poolSize: u32,
   maxChildren: u32,
   spawnCount: u32,
-  _pad: u32,
+  crowdingLimit: u32,
+  minValue: f32,
+  _pad0: u32,
+  _pad1: u32,
+  _pad2: u32,
 }
 
 // Must match src/physarum/layout.ts (16 bytes).
@@ -91,18 +95,22 @@ fn hsv_distance(a: vec3f, b: vec3f) -> f32 {
 }
 
 // Blends two RGB colors in HSV space, going the short way around the hue
-// circle. d is the weight toward rgb2.
+// circle. d is the weight toward rgb2. Hue is further weighted by each color's
+// chroma (saturation x value), since black and greys have no real hue.
 fn hsv_mix(rgb1: vec3f, rgb2: vec3f, d: f32) -> vec3f {
   let a = rgb2hsv(rgb1);
   let b = rgb2hsv(rgb2);
+  let ca = (1.0 - d) * a.y * a.z;
+  let cb = d * b.y * b.z;
+  let t = select(d, cb / (ca + cb), ca + cb > 1e-6);
   let dh = abs(a.x - b.x);
   var h: f32;
   if (dh < 1.0 - dh) {
-    h = mix(a.x, b.x, d);
+    h = mix(a.x, b.x, t);
   } else if (a.x < b.x) {
-    h = fract(mix(a.x + 1.0, b.x, d));
+    h = fract(mix(a.x + 1.0, b.x, t));
   } else {
-    h = fract(mix(a.x, b.x + 1.0, d));
+    h = fract(mix(a.x, b.x + 1.0, t));
   }
   return hsv2rgb(vec3f(h, mix(a.y, b.y, d), mix(a.z, b.z, d)));
 }

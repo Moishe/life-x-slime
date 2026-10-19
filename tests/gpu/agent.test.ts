@@ -3,7 +3,7 @@ import { AgentPass } from '../../src/physarum/agent-pass';
 import { createCountersBuffer, createFieldTexture, createStorageBuffer, createUniformBuffer } from '../../src/physarum/buffers';
 import { ACTOR_BYTES, COUNTERS_BYTES, packActors, unpackActors, unpackCounters, type ActorRecord } from '../../src/physarum/layout';
 import { DEFAULT_PARAMS, SIM_PARAMS_BYTES, packSimParams, type PhysarumParams } from '../../src/physarum/params';
-import { hsvMix } from '../../src/color';
+import { hsvMix, rgb2hsv } from '../../src/color';
 import { actor, getDevice, readBuffer, setPixel, solidTexels, writeTexture } from './helpers';
 
 const W = 64;
@@ -30,11 +30,12 @@ async function runAgent(actors: ActorRecord[], overrides: Partial<PhysarumParams
   const counters = createCountersBuffer(device);
   const trail = createFieldTexture(device, W, W, 'trail');
   const food = createFieldTexture(device, W, W, 'food');
+  const density = createStorageBuffer(device, W * W * 4, 'density');
   if (opts.trail) writeTexture(device, trail, W, W, opts.trail);
   if (opts.food) writeTexture(device, food, W, W, opts.food);
 
   const encoder = device.createCommandEncoder();
-  new AgentPass(device).encode(encoder, { params, actors: actorBuf, children, counters, trail, food }, poolSize);
+  new AgentPass(device).encode(encoder, { params, actors: actorBuf, children, counters, trail, food, density }, poolSize);
   device.queue.submit([encoder.finish()]);
 
   return {
@@ -236,6 +237,11 @@ describe('AgentPass deposit color', () => {
     expected.forEach((v, k) => expect(actors[0].color[k]).toBeCloseTo(v, 2));
     expect(actors[0].color[3]).toBeCloseTo(0.5, 5);
   });
+
+  it('floors the blended color at minValue', async () => {
+    const { actors } = await runAgent([actor()], { intensity: 0.2, minValue: 0.6, directionMomentum: 1 });
+    expect(rgb2hsv([actors[0].color[0], actors[0].color[1], actors[0].color[2]])[2]).toBeCloseTo(0.6, 3);
+  });
 });
 
 describe('AgentPass reproduction', () => {
@@ -267,5 +273,11 @@ describe('AgentPass reproduction', () => {
     expect(counters.childCount).toBe(4);
     expect(children).toHaveLength(2);
     expect(children.every(c => c.alive)).toBe(true);
+  });
+
+  it('lets only crowdingLimit actors on one pixel reproduce', async () => {
+    const crowd = [actor(), actor(), actor(), actor(), actor({ x: 10 })];
+    const { counters } = await runAgent(crowd, { spawnProbability: 1, crowdingLimit: 2 });
+    expect(counters.childCount).toBe(3);
   });
 });

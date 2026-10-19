@@ -9,9 +9,9 @@ describe('DEFAULT_PARAMS', () => {
     expect(DEFAULT_PARAMS).toEqual({
       lookSlices: 6, lookRadians: 1.31, lookDistance: 17,
       directionRandomization: 0.35, directionMomentum: 0.25, minSpeed: 1.13, maxSpeed: 2.81,
-      intensity: 0.37, foodPerDeath: 0.5, foodExhaustion: 0, foodSensitivity: 0.1,
+      intensity: 0.37, minValue: 0, foodPerDeath: 0.5, foodExhaustion: 0, foodSensitivity: 0.1,
       life: 20000, alwaysSpawnFromParent: 1, spawnRandomOffset: 1, spawnProbability: 0.0134,
-      directionVariance: 1.65, speedVariance: 0.1,
+      directionVariance: 1.65, speedVariance: 0.1, crowdingLimit: 0,
       lockToHsvAngles: 0, hsvAngleOffset: 1, hsvSaturationMultiplier: 1, hsvValueMultiplier: 1,
       fadeDecrement: 0.001, blurMultiplier: 10.6, blurInterval: 1, foodFadeDecrement: 0.002, foodFadeInterval: 1,
       wrapBounds: true, rngSeed: 1,
@@ -24,10 +24,10 @@ describe('packSimParams', () => {
     // Distinct values per field so a swapped pair of offsets can't go unnoticed.
     const params: PhysarumParams = {
       lookSlices: 3, lookRadians: 1.5, lookDistance: 10, directionRandomization: 0.25,
-      directionMomentum: 0.75, minSpeed: 0.3, maxSpeed: 2, intensity: 0.9,
+      directionMomentum: 0.75, minSpeed: 0.3, maxSpeed: 2, intensity: 0.9, minValue: 0.35,
       foodPerDeath: 0.5, foodExhaustion: 0.8, foodSensitivity: 0.1, life: 20000,
       alwaysSpawnFromParent: -1, spawnRandomOffset: 1.25, spawnProbability: 0.0001, directionVariance: 0.6,
-      speedVariance: 0.15, lockToHsvAngles: 6, hsvAngleOffset: 0.2, hsvSaturationMultiplier: 1.1,
+      speedVariance: 0.15, crowdingLimit: 7, lockToHsvAngles: 6, hsvAngleOffset: 0.2, hsvSaturationMultiplier: 1.1,
       hsvValueMultiplier: 1.3, fadeDecrement: 0.01, blurMultiplier: 4, blurInterval: 2,
       foodFadeDecrement: 0.002, foodFadeInterval: 3, wrapBounds: false, rngSeed: 9,
     };
@@ -47,7 +47,9 @@ describe('packSimParams', () => {
     expect(i[13]).toBe(-1);
     expect(u[18]).toBe(6);
     expect(u[22]).toBe(0);
-    expect([u[23], u[24], u[25], u[26], u[27]]).toEqual([77, 256, 32, 5, 0]);
+    expect([u[23], u[24], u[25], u[26], u[27]]).toEqual([77, 256, 32, 5, 7]);
+    expect(f[28]).toBeCloseTo(0.35, 6);
+    expect([u[29], u[30], u[31]]).toEqual([0, 0, 0]);
   });
 });
 

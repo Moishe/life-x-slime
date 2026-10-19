@@ -42,6 +42,7 @@ export class PhysarumSim {
   private spawns!: GPUBuffer;
   private foodSeeds!: GPUBuffer;
   private readonly counters: GPUBuffer;
+  private readonly density: GPUBuffer;
   private readonly countersStaging: GPUBuffer;
   private readonly simParams: GPUBuffer;
   private readonly trailFadeParams: GPUBuffer;
@@ -69,6 +70,7 @@ export class PhysarumSim {
     this.food = createFieldTexture(device, width, height, 'food');
 
     this.counters = createCountersBuffer(device);
+    this.density = createStorageBuffer(device, width * height * 4, 'density');
     this.countersStaging = device.createBuffer({
       label: 'counters staging',
       size: COUNTERS_BYTES,
@@ -132,6 +134,7 @@ export class PhysarumSim {
     const encoder = device.createCommandEncoder({ label: 'physarum step' });
     // Reset childCount and aliveCount (bytes 4..12); head and childrenInserted persist.
     encoder.clearBuffer(this.counters, 4, 8);
+    if (p.crowdingLimit > 0) encoder.clearBuffer(this.density);
 
     const diffuse = this.stepIndex % Math.max(1, p.blurInterval) === 0;
     let current = this.trailA;
@@ -153,7 +156,7 @@ export class PhysarumSim {
 
     this.agentPass.encode(encoder, {
       params: this.simParams, actors: this.actors, children: this.children,
-      counters: this.counters, trail: current, food: this.food,
+      counters: this.counters, trail: current, food: this.food, density: this.density,
     }, this.poolSizeValue);
     this.injectPass.encode(encoder, {
       params: this.simParams, actors: this.actors, spawns: this.spawns,

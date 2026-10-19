@@ -9,6 +9,7 @@ export interface AgentBindings {
   counters: GPUBuffer;
   trail: GPUTexture;
   food: GPUTexture;
+  density: GPUBuffer;
 }
 
 // Moves, kills/respawns, steers and reproduces every actor.
@@ -33,6 +34,7 @@ export class AgentPass {
         { binding: 3, resource: { buffer: b.counters } },
         { binding: 4, resource: b.trail.createView() },
         { binding: 5, resource: b.food.createView() },
+        { binding: 6, resource: { buffer: b.density } },
       ],
     });
     const pass = encoder.beginComputePass({ label: 'agent' });

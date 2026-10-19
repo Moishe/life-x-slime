@@ -9,6 +9,7 @@ export interface PhysarumParams {
   minSpeed: number;
   maxSpeed: number;
   intensity: number;
+  minValue: number;
   foodPerDeath: number;
   foodExhaustion: number;
   foodSensitivity: number;
@@ -18,6 +19,7 @@ export interface PhysarumParams {
   spawnProbability: number;
   directionVariance: number;
   speedVariance: number;
+  crowdingLimit: number;
   lockToHsvAngles: number;
   hsvAngleOffset: number;
   hsvSaturationMultiplier: number;
@@ -42,6 +44,7 @@ export const DEFAULT_PARAMS: PhysarumParams = {
   minSpeed: 1.13,
   maxSpeed: 2.81,
   intensity: 0.37,
+  minValue: 0,
   foodPerDeath: 0.5,
   foodExhaustion: 0,
   foodSensitivity: 0.1,
@@ -51,6 +54,7 @@ export const DEFAULT_PARAMS: PhysarumParams = {
   spawnProbability: 0.0134,
   directionVariance: 1.65,
   speedVariance: 0.1,
+  crowdingLimit: 0,
   lockToHsvAngles: 0,
   hsvAngleOffset: 1,
   hsvSaturationMultiplier: 1,
@@ -74,7 +78,7 @@ export interface SimFrame {
   spawnCount: number;
 }
 
-export const SIM_PARAMS_BYTES = 112;
+export const SIM_PARAMS_BYTES = 128;
 
 // Must match `struct SimParams` in shaders/common.wgsl.
 export function packSimParams(p: PhysarumParams, frame: SimFrame): ArrayBuffer {
@@ -109,7 +113,8 @@ export function packSimParams(p: PhysarumParams, frame: SimFrame): ArrayBuffer {
   u[24] = frame.poolSize;
   u[25] = frame.maxChildren;
   u[26] = frame.spawnCount;
-  u[27] = 0;
+  u[27] = p.crowdingLimit;
+  f[28] = p.minValue;
   return buf;
 }
 

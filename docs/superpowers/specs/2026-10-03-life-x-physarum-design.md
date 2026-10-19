@@ -211,6 +211,7 @@ One shared set, all live-editable in the panel. Defaults were tuned by explorati
 | `minSpeed` | 1.13 | 0.3 | 0 – 5 |
 | `maxSpeed` | 2.81 | 2.0 | 0 – 10 |
 | `intensity` | 0.37 | 1.0 | 0 – 2 |
+| `minValue` | 0 (off) | — | 0 – 1: floor on an actor's HSV value after each step's color blend |
 | `foodPerDeath` | 0.5 | — | 0 – 1 |
 | `food_exhaustion` | 0 (disabled; 0 disables) | 2.0 (different formula) | 0 – 1 |
 | `food_sensitivity` | 0.1 | 0.1 (different formula) | 0 – 2 |
@@ -220,6 +221,7 @@ One shared set, all live-editable in the panel. Defaults were tuned by explorati
 | `spawnProbability` | 0.0134 | — (parsed, unused) | 0 – 0.05 |
 | `directionVariance` | 1.65 | ±π/4 (CPU parent spawns) | 0 – π |
 | `speedVariance` | 0.1 | — | 0 – 1 |
+| `crowdingLimit` | 0 (off) | — | 0 – 64 (integer): actors past this many on one pixel in a step don't reproduce |
 | `lock_to_hsv_angles` | 0 | 0 | 0 – 12 (integer) |
 | `hsv_angle_offset` | 1.0 | 1.0 | 0 – 1 |
 | `hsv_saturation_multiplier` | 1 | 1 | 0 – 2 |

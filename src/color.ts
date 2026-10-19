@@ -35,15 +35,19 @@ export function hsvDistance(a: Vec3, b: Vec3): number {
 }
 
 // Blends two RGB colors in HSV space, going the short way around the hue circle.
-// d is the weight toward rgb2.
+// d is the weight toward rgb2. Hue is further weighted by each color's chroma
+// (saturation x value), since black and greys have no real hue (rgb2hsv says 0, red).
 export function hsvMix(rgb1: Vec3, rgb2: Vec3, d: number): Vec3 {
   const a = rgb2hsv(rgb1);
   const b = rgb2hsv(rgb2);
+  const ca = (1 - d) * a[1] * a[2];
+  const cb = d * b[1] * b[2];
+  const t = ca + cb > 1e-6 ? cb / (ca + cb) : d;
   const dh = Math.abs(a[0] - b[0]);
   let h: number;
-  if (dh < 1 - dh) h = mix(a[0], b[0], d);
-  else if (a[0] < b[0]) h = fract(mix(a[0] + 1, b[0], d));
-  else h = fract(mix(a[0], b[0] + 1, d));
+  if (dh < 1 - dh) h = mix(a[0], b[0], t);
+  else if (a[0] < b[0]) h = fract(mix(a[0] + 1, b[0], t));
+  else h = fract(mix(a[0], b[0] + 1, t));
   return hsv2rgb([h, mix(a[1], b[1], d), mix(a[2], b[2], d)]);
 }
 

@@ -4,6 +4,8 @@
 @group(0) @binding(3) var<storage, read_write> counters: Counters;
 @group(0) @binding(4) var trail: texture_2d<f32>;
 @group(0) @binding(5) var food: texture_2d<f32>;
+// Actors per field pixel so far this step; cleared before each agent pass.
+@group(0) @binding(6) var<storage, read_write> density: array<atomic<u32>>;
 
 // Starting "worst" sensor score, as in Particles.
 const MIN_DISTANCE: f32 = 5.0;
@@ -26,6 +28,12 @@ fn keep_in_field(p: vec2f) -> vec2f {
     return min(p - floor(p / dims) * dims, inside);
   }
   return clamp(p, vec2f(0.0), inside);
+}
+
+// Respawns can land just outside the field, so clamp before indexing.
+fn pixel_index(p: vec2f) -> u32 {
+  let c = vec2u(clamp(floor(p), vec2f(0.0), field_size() - 1.0));
+  return c.y * u32(params.width) + c.x;
 }
 
 fn hue_lock(rgb: vec3f) -> vec4f {
@@ -149,9 +157,23 @@ fn step_actor(id: u32) -> bool {
   a.age += 1u;
 
   let trailHere = load_or_zero(trail, a.pos);
-  a.color = vec4f(hsv_mix(trailHere.rgb, a.color.rgb, params.intensity), params.intensity);
+  var rgb = hsv_mix(trailHere.rgb, a.color.rgb, params.intensity);
+  // Floor the value so colonies wandering over the black field don't fade to black.
+  if (params.minValue > 0.0) {
+    var hsv = rgb2hsv(rgb);
+    hsv.z = max(hsv.z, params.minValue);
+    rgb = hsv2rgb(hsv);
+  }
+  a.color = vec4f(rgb, params.intensity);
 
-  maybe_spawn_child(a, &rng);
+  // Only the first crowdingLimit actors to reach a pixel this step may reproduce.
+  var crowded = false;
+  if (params.crowdingLimit > 0u) {
+    crowded = atomicAdd(&density[pixel_index(a.pos)], 1u) >= params.crowdingLimit;
+  }
+  if (!crowded) {
+    maybe_spawn_child(a, &rng);
+  }
   a.rng = rng;
   actors[id] = a;
   return true;
