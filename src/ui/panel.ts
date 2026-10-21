@@ -1,5 +1,6 @@
 import GUI from 'lil-gui';
 import { LIFE_SIZES, type AppSettings } from '../app/settings';
+import { MAX_COLORS, PALETTE_NAMES } from '../life/palette';
 import type { PhysarumParams } from '../physarum/params';
 
 export interface PanelActions {
@@ -44,6 +45,8 @@ export function buildPanel(settings: AppSettings, params: PhysarumParams, poolSi
   life.add(settings, 'lifeHz', 0.25, 8, 0.25).name('tick rate (Hz)');
   const boardSize = life.add(settings, 'lifeSize', LIFE_SIZES).name('board size').onChange(actions.lifeSizeChanged);
   boardSize.domElement.dataset.testid = 'board-size';
+  life.add(settings, 'palette', PALETTE_NAMES);
+  life.add(settings, 'colorCount', 1, MAX_COLORS, 1).name('colors');
 
   const bridge = gui.addFolder('Bridge');
   bridge.add(settings, 'actorsPerBirth', 0, 256, 1);
@@ -91,6 +94,7 @@ export function buildPanel(settings: AppSettings, params: PhysarumParams, poolSi
   lifecycle.add(params, 'speedVariance', 0, 1, 0.01);
   lifecycle.add(params, 'spawnRandomOffset', 0, 16, 0.1);
   lifecycle.add(params, 'alwaysSpawnFromParent', [-1, 0, 1]);
+  lifecycle.add(params, 'spawnWithSeedColor').name('spawn with parent seed color');
   lifecycle.add(params, 'life', 1, 100000, 1);
 
   const world = physarum.addFolder('World');

@@ -42,7 +42,8 @@ fn hue_lock(rgb: vec3f) -> vec4f {
 }
 
 // Respawn in place, per always_spawn_from_parent (> 0 from a random living
-// parent, otherwise at a random position keeping its own color).
+// parent, otherwise at a random position keeping its own color). A parent
+// passes on its trail-blended color, or its seed when spawnWithSeedColor is on.
 fn respawn(a: ptr<function, Actor>, rng: ptr<function, u32>) {
   var fromParent = false;
   if (params.alwaysSpawnFromParent > 0) {
@@ -52,7 +53,7 @@ fn respawn(a: ptr<function, Actor>, rng: ptr<function, u32>) {
     if (parent.alive != 0u) {
       (*a).pos = parent.pos;
       (*a).dir = parent.dir;
-      (*a).color = hue_lock(parent.color.rgb);
+      (*a).color = hue_lock(select(parent.color.rgb, parent.seed.rgb, params.spawnWithSeedColor != 0u));
       fromParent = true;
     }
   }
@@ -111,6 +112,9 @@ fn maybe_spawn_child(a: Actor, rng: ptr<function, u32>) {
     return;
   }
   var c = a;
+  if (params.spawnWithSeedColor != 0u) {
+    c.color = a.seed;
+  }
   let offset = (rand(rng) * 2.0 - 1.0) * params.spawnRandomOffset;
   c.pos = keep_in_field(a.pos + vec2f(-sin(a.dir), cos(a.dir)) * offset);
   c.dir = a.dir + (rand(rng) * 2.0 - 1.0) * params.directionVariance;

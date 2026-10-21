@@ -2,7 +2,9 @@ import { FixedStepClock, StepTicker } from './clock';
 import { RateMeter } from './rates';
 import { DEFAULT_SETTINGS, FIELD_SIZE, PHYSARUM_HZ, cellSizeFor, type AppSettings } from './settings';
 import { SpawnScheduler, birthsToActors, deathsToFoodSeeds } from '../bridge/spawner';
+import type { Vec3 } from '../color';
 import type { Cell } from '../life/engine';
+import { paletteColors } from '../life/palette';
 import { LifeWorld } from '../life/world';
 import type { FoodSeed } from '../physarum/layout';
 import { PhysarumSim } from '../physarum/simulation';
@@ -39,6 +41,7 @@ export class App {
   private pendingSeeds: FoodSeed[] = [];
   private lastChildrenInserted = 0;
   private lifeDirty = true;
+  private lifePaletteKey = '';
   private ghost: Cell[] = [];
   private ghostDirty = true;
   private recorder: MovieRecorder | null = null;
@@ -118,6 +121,10 @@ export class App {
     if (steps > 0) this.physClock.reset();
   }
 
+  private colors(): Vec3[] {
+    return paletteColors(this.settings.palette, this.settings.colorCount);
+  }
+
   private stepsPerLifeTick(): number {
     return Math.max(1, Math.round(PHYSARUM_HZ / this.settings.lifeHz));
   }
@@ -127,12 +134,12 @@ export class App {
     const result = this.world.tick();
     const actors = birthsToActors(
       result.births,
-      { actorsPerBirth: this.settings.actorsPerBirth, cellSize: cellSizeFor(this.settings.lifeSize), minSpeed: this.sim.params.minSpeed, life: this.sim.params.life },
+      { actorsPerBirth: this.settings.actorsPerBirth, cellSize: cellSizeFor(this.settings.lifeSize), minSpeed: this.sim.params.minSpeed, life: this.sim.params.life, colors: this.colors() },
       this.rng,
       this.settings.poolSize,
     );
     this.scheduler.enqueue(actors, this.stepsPerLifeTick());
-    this.pendingSeeds = this.pendingSeeds.concat(deathsToFoodSeeds(result.deaths));
+    this.pendingSeeds = this.pendingSeeds.concat(deathsToFoodSeeds(result.deaths, this.colors()));
     this.lifeDirty = true;
   }
 
@@ -228,9 +235,12 @@ export class App {
   }
 
   private refreshCellTextures(): void {
-    if (this.lifeDirty) {
-      this.compositor.setLife(lifeTexels(this.world.liveCells(), this.settings.lifeSize));
+    // Also redraw when the panel's palette changes, even if Life is paused.
+    const paletteKey = `${this.settings.palette}/${this.settings.colorCount}`;
+    if (this.lifeDirty || paletteKey !== this.lifePaletteKey) {
+      this.compositor.setLife(lifeTexels(this.world.liveCells(), this.settings.lifeSize, this.colors()));
       this.lifeDirty = false;
+      this.lifePaletteKey = paletteKey;
     }
     if (this.ghostDirty) {
       this.compositor.setGhost(ghostTexels(this.ghost, this.settings.lifeSize));

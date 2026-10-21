@@ -154,6 +154,20 @@ describe('AgentPass death and respawn', () => {
     expect(out[0].seed[0]).toBeCloseTo(0, 4);
   });
 
+  it('respawns with the parent seed, not its trail-blended color, when spawnWithSeedColor is on', async () => {
+    const pool = 64;
+    const green: [number, number, number, number] = [0, 1, 0, 1];
+    const brown: [number, number, number, number] = [0.4, 0.25, 0.1, 1];
+    const actors = [
+      actor({ x: 5, y: 5, age: 9, life: 5, rng: seedPickingOtherParent(pool) }),
+      ...Array.from({ length: pool - 1 }, () => actor({ x: 50, y: 50, color: brown, seed: green })),
+    ];
+    const { actors: out } = await runAgent(actors, { alwaysSpawnFromParent: 1, spawnRandomOffset: 0, spawnWithSeedColor: true });
+    expect(out[0].seed[0]).toBeCloseTo(0, 4);
+    expect(out[0].seed[1]).toBeCloseTo(1, 4);
+    expect(out[0].seed[2]).toBeCloseTo(0, 4);
+  });
+
   it('offsets a parent respawn perpendicular to the parent direction by spawnRandomOffset', async () => {
     const pool = 64;
     const rng = seedPickingOtherParent(pool);
@@ -261,6 +275,12 @@ describe('AgentPass reproduction', () => {
       expect(c.seed.slice(0, 3)).toEqual([1, 0, 0]);
       expect(c.rng).not.toBe(0);
     }
+  });
+
+  it('starts a child at the parent seed color when spawnWithSeedColor is on', async () => {
+    const brown: [number, number, number, number] = [0.4, 0.25, 0.1, 1];
+    const { children } = await runAgent([actor({ color: brown })], { spawnProbability: 1, spawnWithSeedColor: true });
+    expect(children[0].color.slice(0, 3)).toEqual([1, 0, 0]);
   });
 
   it('queues no children at spawnProbability 0', async () => {

@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS, LIFE_SIZES, type AppSettings } from './settings';
 import { DEFAULT_PARAMS, type PhysarumParams } from '../physarum/params';
+import { PALETTE_NAMES } from '../life/palette';
 
 export const SETTINGS_FILE_VERSION = 1;
 
@@ -73,6 +74,7 @@ function readSection(section: Record<string, unknown>, defaults: object, warning
 
 function typeProblem(key: string, value: unknown, example: unknown): string | null {
   if (key === 'spawnMode') return value === 'burst' || value === 'trickle' ? null : 'expected "burst" or "trickle"';
+  if (key === 'palette') return PALETTE_NAMES.includes(value as string) ? null : `expected one of ${PALETTE_NAMES.join(', ')}`;
   if (typeof example === 'boolean') return typeof value === 'boolean' ? null : 'expected true or false';
   return typeof value === 'number' && Number.isFinite(value) ? null : 'expected a number';
 }

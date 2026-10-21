@@ -12,6 +12,8 @@ export interface AppSettings {
   randomDensity: number;
   actorsPerBirth: number;
   spawnMode: SpawnMode;
+  palette: string;
+  colorCount: number;
   lifeOpacity: number;
   physarumOpacity: number;
   foodView: boolean;
@@ -25,6 +27,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   randomDensity: 0.2,
   actorsPerBirth: 129,
   spawnMode: 'trickle',
+  palette: 'rainbow',
+  colorCount: 8,
   lifeOpacity: 0.05,
   physarumOpacity: 1,
   foodView: false,

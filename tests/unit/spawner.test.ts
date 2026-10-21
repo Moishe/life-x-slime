@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { SpawnScheduler, birthsToActors, deathsToFoodSeeds } from '../../src/bridge/spawner';
-import { PALETTE } from '../../src/life/palette';
+import { paletteColors } from '../../src/life/palette';
 import { mulberry32 } from '../../src/rng';
 import type { ActorRecord } from '../../src/physarum/layout';
 
-const settings = { actorsPerBirth: 16, cellSize: 16, minSpeed: 0.3, life: 20000 };
+const PALETTE = paletteColors('rainbow', 8);
+const settings = { actorsPerBirth: 16, cellSize: 16, minSpeed: 0.3, life: 20000, colors: PALETTE };
 const fakeActors = (n: number, tag = 0): ActorRecord[] =>
   Array.from({ length: n }, (_, i) => ({
     x: tag, y: i, dir: 0, speed: 0, seed: [1, 0, 0, 1], color: [1, 0, 0, 1], age: 0, life: 1, alive: true, rng: 1,
@@ -52,7 +53,7 @@ describe('birthsToActors', () => {
 
 describe('deathsToFoodSeeds', () => {
   it('makes one seed per death in the organism color', () => {
-    expect(deathsToFoodSeeds([{ x: 4, y: 7, paletteIndex: 5 }])).toEqual([{ cellX: 4, cellY: 7, rgb: [...PALETTE[5]] }]);
+    expect(deathsToFoodSeeds([{ x: 4, y: 7, paletteIndex: 5 }], PALETTE)).toEqual([{ cellX: 4, cellY: 7, rgb: [...PALETTE[5]] }]);
   });
 });
 

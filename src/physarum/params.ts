@@ -17,6 +17,7 @@ export interface PhysarumParams {
   alwaysSpawnFromParent: number;
   spawnRandomOffset: number;
   spawnProbability: number;
+  spawnWithSeedColor: boolean;
   directionVariance: number;
   speedVariance: number;
   crowdingLimit: number;
@@ -52,6 +53,7 @@ export const DEFAULT_PARAMS: PhysarumParams = {
   alwaysSpawnFromParent: 1,
   spawnRandomOffset: 1,
   spawnProbability: 0.0134,
+  spawnWithSeedColor: false,
   directionVariance: 1.65,
   speedVariance: 0.1,
   crowdingLimit: 0,
@@ -115,6 +117,7 @@ export function packSimParams(p: PhysarumParams, frame: SimFrame): ArrayBuffer {
   u[26] = frame.spawnCount;
   u[27] = p.crowdingLimit;
   f[28] = p.minValue;
+  u[29] = p.spawnWithSeedColor ? 1 : 0;
   return buf;
 }
 

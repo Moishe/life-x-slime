@@ -22,13 +22,13 @@ describe('serializeSettings', () => {
 
 describe('parseSettings', () => {
   it('round-trips everything that was saved', () => {
-    const settings = { ...DEFAULT_SETTINGS, lifeOpacity: 0.3, lifeSize: 256, spawnMode: 'burst' as const, poolSize: 2 ** 16 };
+    const settings = { ...DEFAULT_SETTINGS, lifeOpacity: 0.3, lifeSize: 256, spawnMode: 'burst' as const, poolSize: 2 ** 16, palette: 'fairy floss', colorCount: 5 };
     const params = { ...DEFAULT_PARAMS, lookDistance: 33, wrapBounds: false, rngSeed: 5 };
     const result = parseSettings(serializeSettings(settings, params), POOL_SIZES);
     expect(result.warnings).toEqual([]);
     expect(result.settings).toEqual({
       lifeHz: settings.lifeHz, randomDensity: settings.randomDensity, actorsPerBirth: settings.actorsPerBirth,
-      spawnMode: 'burst', lifeOpacity: 0.3, physarumOpacity: settings.physarumOpacity, poolSize: 2 ** 16, lifeSize: 256,
+      spawnMode: 'burst', palette: 'fairy floss', colorCount: 5, lifeOpacity: 0.3, physarumOpacity: settings.physarumOpacity, poolSize: 2 ** 16, lifeSize: 256,
     });
     expect(result.physarum).toEqual(params);
   });
@@ -53,7 +53,7 @@ describe('parseSettings', () => {
 
   it('skips values of the wrong type with a warning', () => {
     const result = parseSettings(
-      fileWith({ lifeOpacity: 'high', spawnMode: 'sometimes' }, { wrapBounds: 1, lookDistance: null, minSpeed: Infinity }),
+      fileWith({ lifeOpacity: 'high', spawnMode: 'sometimes', palette: 'plaid' }, { wrapBounds: 1, lookDistance: null, minSpeed: Infinity }),
       POOL_SIZES,
     );
     expect(result.settings).toEqual({});
@@ -61,6 +61,7 @@ describe('parseSettings', () => {
     expect(result.warnings).toEqual([
       'Skipped "lifeOpacity": expected a number.',
       'Skipped "spawnMode": expected "burst" or "trickle".',
+      'Skipped "palette": expected one of rainbow, fairy floss, apple 1980s, dracula, solarized, nord, synthwave, sunset, pico-8.',
       'Skipped "wrapBounds": expected true or false.',
       'Skipped "lookDistance": expected a number.',
       'Skipped "minSpeed": expected a number.',
