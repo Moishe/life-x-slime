@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PhysarumSim } from '../../src/physarum/simulation';
 import { DEFAULT_PARAMS } from '../../src/physarum/params';
-import { actor, getDevice, pixel, readTexture, setPixel, solidTexels, writeTexture } from './helpers';
+import { actor, getDevice, pixel, readBuffer, readTexture, setPixel, solidTexels, writeTexture } from './helpers';
 
 const W = 64;
 
@@ -164,5 +164,39 @@ describe('PhysarumSim', () => {
     expect(Math.abs(afterFirstFade - afterSecondFade - 26)).toBeLessThanOrEqual(2);
     sim.step([], []); // step 3: no fade
     expect(await alpha()).toBe(afterSecondFade);
+  });
+});
+
+describe('PhysarumSim height field', () => {
+  const heightAt = async (sim: PhysarumSim, x: number, y: number) =>
+    new Float32Array(await readBuffer(await getDevice(), sim.height, W * W * 4))[y * W + x];
+
+  it('rises under an actor by the blurred count times the gain', async () => {
+    const sim = await makeSim();
+    sim.heightGain = 0.9;
+    sim.heightDecay = 0;
+    sim.step([actor({ x: 5.5, y: 7.5 })], []);
+    expect(await heightAt(sim, 5, 7)).toBeCloseTo(0.1, 5);
+    expect(await heightAt(sim, 6, 8)).toBeCloseTo(0.1, 5);
+    expect(await heightAt(sim, 9, 9)).toBe(0);
+  });
+
+  it('decays each step', async () => {
+    const sim = await makeSim();
+    sim.heightGain = 0.9;
+    sim.heightDecay = 0;
+    sim.step([actor({ x: 5.5, y: 7.5 })], []);
+    sim.heightGain = 0;
+    sim.heightDecay = 0.5;
+    sim.step([], []);
+    expect(await heightAt(sim, 5, 7)).toBeCloseTo(0.05, 5);
+  });
+
+  it('is flattened by clearTrail', async () => {
+    const sim = await makeSim();
+    sim.heightGain = 0.9;
+    sim.step([actor({ x: 5.5, y: 7.5 })], []);
+    sim.clearTrail();
+    expect(await heightAt(sim, 5, 7)).toBe(0);
   });
 });

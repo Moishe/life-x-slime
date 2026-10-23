@@ -285,3 +285,57 @@ test('recording downloads an MP4 and toggles the start and end buttons', async (
   await expect(end).toBeDisabled();
   await expect(page.getByTestId('readout-recording')).toHaveText('off');
 });
+
+// Types a value into the lil-gui number control whose label is exactly `name`.
+async function setNamed(page: Page, name: string, value: number): Promise<void> {
+  const input = page.locator('.lil-controller', { has: page.locator('.lil-name', { hasText: new RegExp(`^${name}$`) }) }).locator('input');
+  await input.fill(String(value));
+  await input.press('Enter');
+}
+
+async function fieldPixels(page: Page): Promise<Uint8Array> {
+  return PNG.sync.read(await page.locator('#field').screenshot()).data;
+}
+
+const differingPixels = (a: Uint8Array, b: Uint8Array) => {
+  let n = 0;
+  for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 24) n++;
+  return n;
+};
+
+test('relief shading changes the rendered field once actors have piled up', async ({ page }) => {
+  await page.goto('/?seed=7&size=64');
+  await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+  await page.getByRole('button', { name: 'random fill' }).click();
+  await expect.poll(alive(page), { timeout: 5000 }).toBeGreaterThan(0);
+  await page.waitForTimeout(2500);
+  await page.getByRole('button', { name: 'play / pause' }).click();
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(200);
+  const flat = await fieldPixels(page);
+  await setNamed(page, 'relief', 1);
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await page.waitForTimeout(300);
+  const shaded = await fieldPixels(page);
+  expect(differingPixels(flat, shaded)).toBeGreaterThan(flat.length / 4 / 100);
+  await setNamed(page, 'relief', 0);
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await page.waitForTimeout(300);
+  // Actors keep moving, so allow drift, but turning relief off must undo most of the change.
+  expect(differingPixels(flat, await fieldPixels(page))).toBeLessThan(differingPixels(flat, shaded) / 4);
+});
+
+test('relief settings are saved to and loaded from the settings file', async ({ page }) => {
+  await boot(page, 128);
+  await setNamed(page, 'relief', 0.4);
+  await setNamed(page, 'lightAngle', 2.5);
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'save settings' }).click();
+  const data = JSON.parse(await readFile(await (await downloadPromise).path(), 'utf8'));
+  expect(data.settings.relief).toBe(0.4);
+  expect(data.settings.lightAngle).toBe(2.5);
+  await loadSettingsFile(page, JSON.stringify({ version: 1, settings: { relief: 0.7, heightDecay: 0.05 }, physarum: {} }));
+  await expect(page.locator('.lil-controller', { has: page.locator('.lil-name', { hasText: /^relief$/ }) }).locator('input')).toHaveValue('0.7');
+  await expect(page.locator('.lil-controller', { has: page.locator('.lil-name', { hasText: /^heightDecay$/ }) }).locator('input')).toHaveValue('0.05');
+  await expect(page.locator('#message')).toBeHidden();
+});

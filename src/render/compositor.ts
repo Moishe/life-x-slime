@@ -1,8 +1,22 @@
 import code from './composite.wgsl?raw';
 import { createModule } from '../gpu/shader';
 
-// Draws the Physarum field, Life cells and placement ghost into one target.
+// Relief shading of the Physarum layer: strength in [0, 1], the height field's
+// scale in pixels, and the light's direction as angles in radians.
+export interface ReliefSettings {
+  relief: number;
+  reliefHeight: number;
+  lightAngle: number;
+  lightElevation: number;
+}
+
+const PARAMS_BYTES = 48;
+
+// Draws the Physarum field (shaded by its height field), Life cells and
+// placement ghost into one target.
 export class Compositor {
+  relief: ReliefSettings = { relief: 0, reliefHeight: 0, lightAngle: 0, lightElevation: 0 };
+
   private module: GPUShaderModule;
   // One pipeline per target color format (the canvas's, and rgba8unorm for snapshots).
   private pipelines = new Map<GPUTextureFormat, GPURenderPipeline>();
@@ -10,6 +24,10 @@ export class Compositor {
   private params: GPUBuffer;
   private lifeTexture!: GPUTexture;
   private ghostTexture!: GPUTexture;
+  // Until setHeight, a one-pixel flat field.
+  private height: GPUBuffer;
+  private fieldWidth = 1;
+  private fieldHeight = 1;
 
   constructor(
     private device: GPUDevice,
@@ -17,7 +35,8 @@ export class Compositor {
   ) {
     this.module = createModule(device, code, 'composite');
     this.sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
-    this.params = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.params = device.createBuffer({ size: PARAMS_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.height = device.createBuffer({ label: 'flat height', size: 4, usage: GPUBufferUsage.STORAGE });
     this.setGridSize(gridSize);
   }
 
@@ -37,6 +56,13 @@ export class Compositor {
     this.ghostTexture = cellTexture('ghost cells');
   }
 
+  // The height field to shade the Physarum layer with: one f32 per field pixel, row-major.
+  setHeight(height: GPUBuffer, fieldWidth: number, fieldHeight: number): void {
+    this.height = height;
+    this.fieldWidth = fieldWidth;
+    this.fieldHeight = fieldHeight;
+  }
+
   setLife(texels: Uint8Array): void {
     this.writeCells(this.lifeTexture, texels);
   }
@@ -46,7 +72,7 @@ export class Compositor {
   }
 
   render(target: GPUTexture, field: GPUTexture, physarumOpacity: number, lifeOpacity: number, ghostOpacity: number): void {
-    this.device.queue.writeBuffer(this.params, 0, new Float32Array([physarumOpacity, lifeOpacity, ghostOpacity, 0]));
+    this.device.queue.writeBuffer(this.params, 0, this.packParams(physarumOpacity, lifeOpacity, ghostOpacity));
     const pipeline = this.pipelineFor(target.format);
     const bindGroup = this.device.createBindGroup({
       layout: pipeline.getBindGroupLayout(0),
@@ -56,6 +82,7 @@ export class Compositor {
         { binding: 2, resource: this.sampler },
         { binding: 3, resource: this.lifeTexture.createView() },
         { binding: 4, resource: this.ghostTexture.createView() },
+        { binding: 5, resource: { buffer: this.height } },
       ],
     });
     const encoder = this.device.createCommandEncoder({ label: 'composite' });
@@ -67,6 +94,18 @@ export class Compositor {
     pass.draw(3);
     pass.end();
     this.device.queue.submit([encoder.finish()]);
+  }
+
+  // Must match `struct CompositeParams` in composite.wgsl.
+  private packParams(physarumOpacity: number, lifeOpacity: number, ghostOpacity: number): ArrayBuffer {
+    const { relief, reliefHeight, lightAngle, lightElevation } = this.relief;
+    const buf = new ArrayBuffer(PARAMS_BYTES);
+    new Float32Array(buf, 0, 8).set([
+      physarumOpacity, lifeOpacity, ghostOpacity, relief, reliefHeight,
+      Math.cos(lightAngle) * Math.cos(lightElevation), Math.sin(lightAngle) * Math.cos(lightElevation), Math.sin(lightElevation),
+    ]);
+    new Uint32Array(buf, 32, 2).set([this.fieldWidth, this.fieldHeight]);
+    return buf;
   }
 
   private pipelineFor(format: GPUTextureFormat): GPURenderPipeline {

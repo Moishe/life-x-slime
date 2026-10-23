@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  DEFAULT_PARAMS, DEFAULT_POOL_SIZE, SIM_PARAMS_BYTES, packFadeParams, packFoodParams, packSimParams, supportedPoolSizes, type PhysarumParams,
+  DEFAULT_PARAMS, DEFAULT_POOL_SIZE, HEIGHT_PARAMS_BYTES, SIM_PARAMS_BYTES, packFadeParams, packFoodParams, packHeightParams, packSimParams, supportedPoolSizes, type PhysarumParams,
 } from '../../src/physarum/params';
 
 describe('DEFAULT_PARAMS', () => {
@@ -62,6 +62,12 @@ describe('small uniform packers', () => {
   it('packs food params', () => {
     const f = new Float32Array(packFoodParams(16, 0.5, 2048, 1024));
     expect(Array.from(f)).toEqual([16, 0.5, 2048, 1024]);
+  });
+
+  it('packs height params', () => {
+    const buf = packHeightParams(0.1, 0.02);
+    expect(buf.byteLength).toBe(HEIGHT_PARAMS_BYTES);
+    expect(Array.from(new Float32Array(buf))).toEqual([Math.fround(0.1), Math.fround(0.02), 0, 0]);
   });
 });
 

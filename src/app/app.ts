@@ -62,6 +62,7 @@ export class App {
     this.sim.params.rngSeed = seed;
     this.scheduler = new SpawnScheduler(this.settings.poolSize);
     this.compositor = new Compositor(device, lifeSize);
+    this.compositor.setHeight(this.sim.height, FIELD_SIZE, FIELD_SIZE);
   }
 
   frame(dtMs: number): void {
@@ -206,6 +207,8 @@ export class App {
   }
 
   private physStep(): void {
+    this.sim.heightGain = this.settings.heightGain;
+    this.sim.heightDecay = this.settings.heightDecay;
     this.scheduler.mode = this.settings.spawnMode;
     const spawns = this.scheduler.takeForStep(this.sim.maxSpawnsPerStep);
     const seeds = this.pendingSeeds.splice(0, this.sim.maxFoodSeedsPerStep);
@@ -230,6 +233,8 @@ export class App {
 
   private render(): void {
     this.refreshCellTextures();
+    const { relief, reliefHeight, lightAngle, lightElevation } = this.settings;
+    this.compositor.relief = { relief, reliefHeight, lightAngle, lightElevation };
     const field = this.settings.foodView ? this.sim.foodTexture : this.sim.trail;
     this.compositor.render(this.context.getCurrentTexture(), field, this.settings.physarumOpacity, this.settings.lifeOpacity, 1);
   }

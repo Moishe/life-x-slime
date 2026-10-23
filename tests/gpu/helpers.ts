@@ -67,3 +67,49 @@ export function actor(overrides: Partial<ActorRecord> = {}): ActorRecord {
     ...overrides,
   };
 }
+
+// Reads an r16float texture as floats, row by row from the top.
+export async function readTextureF16(device: GPUDevice, texture: GPUTexture, width: number, height: number): Promise<Float32Array> {
+  if ((width * 2) % 256 !== 0) throw new Error('readTextureF16 needs width * 2 to be a multiple of 256');
+  const size = width * height * 2;
+  const staging = device.createBuffer({ size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  const encoder = device.createCommandEncoder();
+  encoder.copyTextureToBuffer({ texture }, { buffer: staging, bytesPerRow: width * 2 }, [width, height]);
+  device.queue.submit([encoder.finish()]);
+  await staging.mapAsync(GPUMapMode.READ);
+  const halves = new Uint16Array(staging.getMappedRange().slice(0));
+  staging.unmap();
+  staging.destroy();
+  return Float32Array.from(halves, halfToFloat);
+}
+
+function halfToFloat(h: number): number {
+  const sign = h & 0x8000 ? -1 : 1;
+  const exponent = (h >> 10) & 0x1f;
+  const fraction = h & 0x3ff;
+  if (exponent === 0) return sign * 2 ** -14 * (fraction / 1024);
+  if (exponent === 0x1f) return fraction ? NaN : sign * Infinity;
+  return sign * 2 ** (exponent - 15) * (1 + fraction / 1024);
+}
+
+// Writes floats into an r16float texture, row by row from the top.
+export function writeTextureF16(device: GPUDevice, texture: GPUTexture, width: number, height: number, data: Float32Array): void {
+  device.queue.writeTexture({ texture }, Uint16Array.from(data, floatToHalf), { bytesPerRow: width * 2 }, [width, height]);
+}
+
+// Round-to-nearest half conversion for finite values within the half range.
+function floatToHalf(value: number): number {
+  const f = new Float32Array([value]);
+  const bits = new Uint32Array(f.buffer)[0];
+  const sign = (bits >>> 16) & 0x8000;
+  let exponent = ((bits >>> 23) & 0xff) - 127 + 15;
+  let mantissa = bits & 0x7fffff;
+  if (exponent <= 0) {
+    if (exponent < -10) return sign;
+    mantissa = (mantissa | 0x800000) >> (1 - exponent);
+    return sign | ((mantissa + 0x1000) >> 13);
+  }
+  if (exponent >= 0x1f) return sign | 0x7c00;
+  const half = sign | (exponent << 10) | (mantissa >> 13);
+  return mantissa & 0x1fff ? half + ((mantissa & 0x1000) ? 1 : 0) : half;
+}

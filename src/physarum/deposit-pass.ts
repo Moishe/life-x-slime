@@ -6,9 +6,11 @@ export interface DepositBindings {
   params: GPUBuffer;
   actors: GPUBuffer;
   target: GPUTexture;
+  pile: GPUTexture;
 }
 
-// Draws each alive actor's deposit color into the trail, replacing what was there.
+// Draws each alive actor's deposit color into the trail, replacing what was
+// there, and adds one per actor to the pile texture, which starts from zero.
 export class DepositPass {
   private pipeline: GPURenderPipeline;
 
@@ -18,7 +20,14 @@ export class DepositPass {
       label: 'deposit',
       layout: 'auto',
       vertex: { module, entryPoint: 'vs' },
-      fragment: { module, entryPoint: 'fs', targets: [{ format: 'rgba8unorm' }] },
+      fragment: {
+        module,
+        entryPoint: 'fs',
+        targets: [
+          { format: 'rgba8unorm' },
+          { format: 'r16float', blend: { color: { srcFactor: 'one', dstFactor: 'one' }, alpha: { srcFactor: 'one', dstFactor: 'one' } } },
+        ],
+      },
       primitive: { topology: 'point-list' },
     });
   }
@@ -33,7 +42,10 @@ export class DepositPass {
     });
     const pass = encoder.beginRenderPass({
       label: 'deposit',
-      colorAttachments: [{ view: b.target.createView(), loadOp: 'load', storeOp: 'store' }],
+      colorAttachments: [
+        { view: b.target.createView(), loadOp: 'load', storeOp: 'store' },
+        { view: b.pile.createView(), loadOp: 'clear', clearValue: { r: 0, g: 0, b: 0, a: 0 }, storeOp: 'store' },
+      ],
     });
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, bindGroup);

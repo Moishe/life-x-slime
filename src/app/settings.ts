@@ -19,6 +19,13 @@ export interface AppSettings {
   foodView: boolean;
   poolSize: number;
   lifeSize: number;
+  // Relief shading of the Physarum layer from the pile height field.
+  relief: number;
+  reliefHeight: number;
+  lightAngle: number;
+  lightElevation: number;
+  heightGain: number;
+  heightDecay: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -34,6 +41,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   foodView: false,
   poolSize: DEFAULT_POOL_SIZE,
   lifeSize: 64,
+  relief: 0,
+  reliefHeight: 8,
+  lightAngle: 0.8,
+  lightElevation: 0.7,
+  heightGain: 0.1,
+  heightDecay: 0.02,
 };
 
 // Width of one Life cell's block on the Physarum field, in field pixels.

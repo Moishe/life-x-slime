@@ -2,15 +2,16 @@ import { AgentPass } from './agent-pass';
 import { DepositPass } from './deposit-pass';
 import { DiffusePass } from './diffuse-pass';
 import { FoodPass } from './food-pass';
+import { HeightPass } from './height-pass';
 import { InjectPass } from './inject-pass';
-import { createCountersBuffer, createFieldTexture, createStorageBuffer, createUniformBuffer } from './buffers';
+import { createCountersBuffer, createFieldTexture, createPileTexture, createStorageBuffer, createUniformBuffer } from './buffers';
 import {
   ACTOR_BYTES, COUNTERS_BYTES, FOOD_SEED_BYTES, packActors, packFoodSeeds, unpackCounters,
   type ActorRecord, type CounterValues, type FoodSeed,
 } from './layout';
 import {
-  DEFAULT_PARAMS, FADE_PARAMS_BYTES, FOOD_PARAMS_BYTES, SIM_PARAMS_BYTES,
-  packFadeParams, packFoodParams, packSimParams, type PhysarumParams,
+  DEFAULT_PARAMS, FADE_PARAMS_BYTES, FOOD_PARAMS_BYTES, HEIGHT_PARAMS_BYTES, SIM_PARAMS_BYTES,
+  packFadeParams, packFoodParams, packHeightParams, packSimParams, type PhysarumParams,
 } from './params';
 
 export interface SimOptions {
@@ -26,16 +27,22 @@ const MAX_SPAWNS_PER_STEP = 65536;
 // "One Physarum step" for the pass order.
 export class PhysarumSim {
   params: PhysarumParams = { ...DEFAULT_PARAMS };
+  // How much each step's (blurred) actor count raises the height field, and
+  // what fraction of the height fades per step.
+  heightGain = 0;
+  heightDecay = 0;
 
   private readonly agentPass: AgentPass;
   private readonly injectPass: InjectPass;
   private readonly diffusePass: DiffusePass;
   private readonly depositPass: DepositPass;
   private readonly foodPass: FoodPass;
+  private readonly heightPass: HeightPass;
 
   private trailA: GPUTexture;
   private trailB: GPUTexture;
   private readonly food: GPUTexture;
+  private readonly pile: GPUTexture;
 
   private actors!: GPUBuffer;
   private children!: GPUBuffer;
@@ -43,6 +50,8 @@ export class PhysarumSim {
   private foodSeeds!: GPUBuffer;
   private readonly counters: GPUBuffer;
   private readonly density: GPUBuffer;
+  private readonly heightField: GPUBuffer;
+  private readonly heightParams: GPUBuffer;
   private readonly countersStaging: GPUBuffer;
   private readonly simParams: GPUBuffer;
   private readonly trailFadeParams: GPUBuffer;
@@ -64,13 +73,16 @@ export class PhysarumSim {
     this.diffusePass = new DiffusePass(device);
     this.depositPass = new DepositPass(device);
     this.foodPass = new FoodPass(device);
+    this.heightPass = new HeightPass(device);
 
     this.trailA = createFieldTexture(device, width, height, 'trail A');
     this.trailB = createFieldTexture(device, width, height, 'trail B');
     this.food = createFieldTexture(device, width, height, 'food');
+    this.pile = createPileTexture(device, width, height);
 
     this.counters = createCountersBuffer(device);
     this.density = createStorageBuffer(device, width * height * 4, 'density');
+    this.heightField = createStorageBuffer(device, width * height * 4, 'height');
     this.countersStaging = device.createBuffer({
       label: 'counters staging',
       size: COUNTERS_BYTES,
@@ -80,6 +92,7 @@ export class PhysarumSim {
     this.trailFadeParams = createUniformBuffer(device, FADE_PARAMS_BYTES, 'trail fade params');
     this.foodFadeParams = createUniformBuffer(device, FADE_PARAMS_BYTES, 'food fade params');
     this.foodParams = createUniformBuffer(device, FOOD_PARAMS_BYTES, 'food params');
+    this.heightParams = createUniformBuffer(device, HEIGHT_PARAMS_BYTES, 'height params');
 
     this.clearTrail();
     this.allocatePool(opts.poolSize);
@@ -111,6 +124,11 @@ export class PhysarumSim {
 
   get foodTexture(): GPUTexture {
     return this.food;
+  }
+
+  // Pile height per field pixel (one f32 each, row-major), in [0, 1].
+  get height(): GPUBuffer {
+    return this.heightField;
   }
 
   step(spawns: ActorRecord[], seeds: FoodSeed[]): void {
@@ -162,7 +180,9 @@ export class PhysarumSim {
       params: this.simParams, actors: this.actors, spawns: this.spawns,
       children: this.children, counters: this.counters,
     }, spawns.length + this.maxChildren);
-    this.depositPass.encode(encoder, { params: this.simParams, actors: this.actors, target: current }, this.poolSizeValue);
+    this.depositPass.encode(encoder, { params: this.simParams, actors: this.actors, target: current, pile: this.pile }, this.poolSizeValue);
+    queue.writeBuffer(this.heightParams, 0, packHeightParams(this.heightGain, this.heightDecay));
+    this.heightPass.encode(encoder, { params: this.heightParams, pile: this.pile, height: this.heightField });
 
     queue.submit([encoder.finish()]);
     if (diffuse) [this.trailA, this.trailB] = [this.trailB, this.trailA];
@@ -190,8 +210,12 @@ export class PhysarumSim {
     this.device.queue.submit([encoder.finish()]);
   }
 
+  // Also flattens the height field, which is as much a record of the trail as the texture.
   clearTrail(): void {
     this.clearTextures([this.trailA, this.trailB], { r: 0, g: 0, b: 0, a: 1 });
+    const encoder = this.device.createCommandEncoder({ label: 'clear height' });
+    encoder.clearBuffer(this.heightField);
+    this.device.queue.submit([encoder.finish()]);
   }
 
   clearFood(): void {

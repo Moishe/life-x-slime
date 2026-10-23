@@ -7,6 +7,7 @@ describe('settings', () => {
     expect(DEFAULT_SETTINGS).toEqual({
       playing: true, lifeHz: 7.5, randomDensity: 0.2, actorsPerBirth: 129, spawnMode: 'trickle', palette: 'rainbow', colorCount: 8,
       lifeOpacity: 0.05, physarumOpacity: 1, foodView: false, poolSize: 1048576, lifeSize: 64,
+      relief: 0, reliefHeight: 8, lightAngle: 0.8, lightElevation: 0.7, heightGain: 0.1, heightDecay: 0.02,
     });
   });
 

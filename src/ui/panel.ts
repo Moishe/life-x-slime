@@ -35,6 +35,13 @@ export function buildPanel(settings: AppSettings, params: PhysarumParams, poolSi
   layers.add(settings, 'lifeOpacity', 0, 1, 0.01);
   layers.add(settings, 'physarumOpacity', 0, 1, 0.01);
   layers.add(settings, 'foodView').name('food view (T)');
+  const relief = layers.addFolder('Relief');
+  relief.add(settings, 'relief', 0, 1, 0.01);
+  relief.add(settings, 'reliefHeight', 0, 64, 0.5);
+  relief.add(settings, 'lightAngle', 0, Math.PI * 2, 0.01);
+  relief.add(settings, 'lightElevation', 0.05, Math.PI / 2, 0.01);
+  relief.add(settings, 'heightGain', 0, 1, 0.005);
+  relief.add(settings, 'heightDecay', 0, 0.2, 0.001);
 
   const life = gui.addFolder('Life');
   life.add(actions, 'playPause').name('play / pause');

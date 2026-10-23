@@ -135,6 +135,13 @@ export function packFoodParams(cellSize: number, foodPerDeath: number, width: nu
   return new Float32Array([cellSize, foodPerDeath, width, height]).buffer;
 }
 
+export const HEIGHT_PARAMS_BYTES = 16;
+
+// Must match `struct HeightParams` in shaders/height.wgsl.
+export function packHeightParams(gain: number, decay: number): ArrayBuffer {
+  return new Float32Array([gain, decay, 0, 0]).buffer;
+}
+
 const ACTOR_BYTES_FOR_LIMITS = 64;
 
 // Pool sizes (powers of two from 2^14 to 2^22) whose actor buffer fits the device limits.

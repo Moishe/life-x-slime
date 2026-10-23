@@ -22,13 +22,17 @@ describe('serializeSettings', () => {
 
 describe('parseSettings', () => {
   it('round-trips everything that was saved', () => {
-    const settings = { ...DEFAULT_SETTINGS, lifeOpacity: 0.3, lifeSize: 256, spawnMode: 'burst' as const, poolSize: 2 ** 16, palette: 'fairy floss', colorCount: 5 };
+    const settings = {
+      ...DEFAULT_SETTINGS, lifeOpacity: 0.3, lifeSize: 256, spawnMode: 'burst' as const, poolSize: 2 ** 16, palette: 'fairy floss', colorCount: 5,
+      relief: 0.5, reliefHeight: 12, lightAngle: 1.5, lightElevation: 0.4, heightGain: 0.2, heightDecay: 0.05,
+    };
     const params = { ...DEFAULT_PARAMS, lookDistance: 33, wrapBounds: false, rngSeed: 5 };
     const result = parseSettings(serializeSettings(settings, params), POOL_SIZES);
     expect(result.warnings).toEqual([]);
     expect(result.settings).toEqual({
       lifeHz: settings.lifeHz, randomDensity: settings.randomDensity, actorsPerBirth: settings.actorsPerBirth,
       spawnMode: 'burst', palette: 'fairy floss', colorCount: 5, lifeOpacity: 0.3, physarumOpacity: settings.physarumOpacity, poolSize: 2 ** 16, lifeSize: 256,
+      relief: 0.5, reliefHeight: 12, lightAngle: 1.5, lightElevation: 0.4, heightGain: 0.2, heightDecay: 0.05,
     });
     expect(result.physarum).toEqual(params);
   });

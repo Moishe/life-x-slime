@@ -36,3 +36,13 @@ export function createFieldTexture(device: GPUDevice, width: number, height: num
       GPUTextureUsage.COPY_DST,
   });
 }
+
+// Actors per pixel in one step, summed by additive blending in the deposit pass.
+export function createPileTexture(device: GPUDevice, width: number, height: number): GPUTexture {
+  return device.createTexture({
+    label: 'pile',
+    size: [width, height],
+    format: 'r16float',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+  });
+}

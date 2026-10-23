@@ -22,7 +22,13 @@ fn vs(@builtin(vertex_index) index: u32) -> DepositOut {
   return out;
 }
 
+struct DepositFrag {
+  @location(0) color: vec4f,
+  // Added onto the pile texture, so each actor counts one.
+  @location(1) pile: vec4f,
+}
+
 @fragment
-fn fs(v: DepositOut) -> @location(0) vec4f {
-  return v.color;
+fn fs(v: DepositOut) -> DepositFrag {
+  return DepositFrag(v.color, vec4f(1.0));
 }
