@@ -8,6 +8,7 @@ export interface PanelActions {
   step(): void;
   clear(): void;
   randomFill(): void;
+  chooseImage(): void;
   clearTrail(): void;
   clearFood(): void;
   clearActors(): void;
@@ -42,6 +43,15 @@ export function buildPanel(settings: AppSettings, params: PhysarumParams, poolSi
   relief.add(settings, 'lightElevation', 0.05, Math.PI / 2, 0.01);
   relief.add(settings, 'heightGain', 0, 1, 0.005);
   relief.add(settings, 'heightDecay', 0, 0.2, 0.001);
+
+  const seed = gui.addFolder('Seed');
+  const source = seed.add(settings, 'seedSource', ['life', 'image', 'hybrid']).name('seed source');
+  source.domElement.dataset.testid = 'seed-source';
+  seed.add(actions, 'chooseImage').name('choose image');
+  seed.add(settings, 'imageDensityPercent', 0, 100, 0.1).name('seed density (%)');
+  seed.add(settings, 'imageColorMode', ['natural', 'palette']).name('image colors');
+  seed.add(settings, 'imageIntensitySteepness', 0, 20, 0.1).name('intensity steepness');
+  seed.add(settings, 'imageIntensityMidpoint', 0, 1, 0.01).name('intensity midpoint');
 
   const life = gui.addFolder('Life');
   life.add(actions, 'playPause').name('play / pause');

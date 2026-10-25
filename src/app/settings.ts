@@ -1,3 +1,4 @@
+import type { ImageColorMode } from '../bridge/image-seed';
 import type { SpawnMode } from '../bridge/spawner';
 import { DEFAULT_POOL_SIZE } from '../physarum/params';
 
@@ -5,6 +6,10 @@ export const FIELD_SIZE = 2048;
 // Life board sizes; each divides the field into whole square pixel blocks.
 export const LIFE_SIZES: readonly number[] = [64, 128, 256, 512, 1024];
 export const PHYSARUM_HZ = 30;
+
+// What populates the Physarum field: Life births, a one-time seed from an
+// uploaded image, or Life births colored by the image under each cell (hybrid).
+export type SeedSource = 'life' | 'image' | 'hybrid';
 
 export interface AppSettings {
   playing: boolean;
@@ -26,6 +31,13 @@ export interface AppSettings {
   lightElevation: number;
   heightGain: number;
   heightDecay: number;
+  seedSource: SeedSource;
+  // Share of the seed image's pixels that spawn an actor, 0-100.
+  imageDensityPercent: number;
+  imageColorMode: ImageColorMode;
+  // Sigmoid weighting of image-mode spawns by pixel brightness: 0 steepness = off.
+  imageIntensitySteepness: number;
+  imageIntensityMidpoint: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -47,6 +59,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lightElevation: 0.7,
   heightGain: 0.1,
   heightDecay: 0.02,
+  seedSource: 'life',
+  imageDensityPercent: 5,
+  imageColorMode: 'natural',
+  imageIntensitySteepness: 0,
+  imageIntensityMidpoint: 0.5,
 };
 
 // Width of one Life cell's block on the Physarum field, in field pixels.

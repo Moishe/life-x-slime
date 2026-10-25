@@ -74,6 +74,8 @@ function readSection(section: Record<string, unknown>, defaults: object, warning
 
 function typeProblem(key: string, value: unknown, example: unknown): string | null {
   if (key === 'spawnMode') return value === 'burst' || value === 'trickle' ? null : 'expected "burst" or "trickle"';
+  if (key === 'seedSource') return value === 'life' || value === 'image' || value === 'hybrid' ? null : 'expected "life", "image" or "hybrid"';
+  if (key === 'imageColorMode') return value === 'natural' || value === 'palette' ? null : 'expected "natural" or "palette"';
   if (key === 'palette') return PALETTE_NAMES.includes(value as string) ? null : `expected one of ${PALETTE_NAMES.join(', ')}`;
   if (typeof example === 'boolean') return typeof value === 'boolean' ? null : 'expected true or false';
   return typeof value === 'number' && Number.isFinite(value) ? null : 'expected a number';

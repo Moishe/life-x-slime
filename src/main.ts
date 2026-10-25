@@ -10,6 +10,7 @@ import { buildPanel } from './ui/panel';
 import { buildPatternBar, type Tool } from './ui/pattern-bar';
 import { cellFromPointer, ghostCells } from './ui/placement';
 import { downloadBlob, encodePng, snapshotFilenames } from './ui/export-images';
+import { decodeImage } from './ui/import-image';
 import { createReadouts } from './ui/readouts';
 import { chooseMovieConfig, movieFilename, movieNotice, recordingStatus } from './record/movie-config';
 import { canEncodeVideo } from 'mediabunny';
@@ -110,24 +111,46 @@ async function saveImages(app: App): Promise<void> {
   }
 }
 
-// Asks for a settings file, applies it, and calls `onApplied` so the panel can refresh.
-function loadSettingsFile(app: App, poolSizes: number[], onApplied: () => void): void {
+// Opens the file picker for the given types and hands the chosen file to
+// `use`; an error from `use` is shown with a Close button.
+function pickFile(accept: string, use: (file: File) => Promise<void>): void {
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = '.json,application/json';
+  input.accept = accept;
   input.addEventListener('change', async () => {
     const file = input.files?.[0];
     if (!file) return;
     try {
-      const loaded = parseSettings(await file.text(), poolSizes);
-      app.applySettings(loaded);
-      onApplied();
-      if (loaded.warnings.length > 0) showMessage(`Loaded ${file.name} with problems:\n${loaded.warnings.join('\n')}`, 'close');
+      await use(file);
     } catch (error) {
       showMessage(errorText(error), 'close');
     }
   });
   input.click();
+}
+
+// Asks for a settings file, applies it, and calls `onApplied` so the panel can refresh.
+function loadSettingsFile(app: App, poolSizes: number[], onApplied: () => void): void {
+  pickFile('.json,application/json', async file => {
+    const loaded = parseSettings(await file.text(), poolSizes);
+    app.applySettings(loaded);
+    onApplied();
+    if (loaded.warnings.length > 0) showMessage(`Loaded ${file.name} with problems:\n${loaded.warnings.join('\n')}`, 'close');
+  });
+}
+
+// Asks for an image file and loads it. In hybrid mode the image just becomes
+// the color source for Life; otherwise this switches to image seeding and
+// seeds the field from it once. Calls `onApplied` so the panel can refresh.
+function loadImageFile(app: App, onApplied: () => void): void {
+  pickFile('image/*', async file => {
+    app.loadImage(await decodeImage(file, FIELD_SIZE));
+    if (app.settings.seedSource !== 'hybrid') {
+      app.settings.seedSource = 'image';
+      app.seedFromImage();
+    }
+    onApplied();
+  });
 }
 
 // Keeps the canvas backing store matched to its on-screen size (max 2048).
@@ -159,8 +182,10 @@ function attachUi(app: App, poolSizes: number[]): void {
     saveImages: () => void saveImages(app),
     startRecording: () => void movie.start(),
     endRecording: () => void movie.end(),
-    loadSettings: () => loadSettingsFile(app, poolSizes, () => gui.controllersRecursive().forEach(c => c.updateDisplay())),
+    loadSettings: () => loadSettingsFile(app, poolSizes, refreshPanel),
+    chooseImage: () => loadImageFile(app, refreshPanel),
   });
+  const refreshPanel = () => gui.controllersRecursive().forEach(c => c.updateDisplay());
 
   const button = (property: string) => gui.controllersRecursive().find(c => c.property === property)!;
   const movie = createMovieControls(app, button('startRecording'), button('endRecording'));

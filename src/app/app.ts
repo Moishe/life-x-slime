@@ -1,10 +1,12 @@
 import { FixedStepClock, StepTicker } from './clock';
 import { RateMeter } from './rates';
 import { DEFAULT_SETTINGS, FIELD_SIZE, PHYSARUM_HZ, cellSizeFor, type AppSettings } from './settings';
+import { cellColors, imageToActors, nearestColor, type SeedImage } from '../bridge/image-seed';
 import { SpawnScheduler, birthsToActors, deathsToFoodSeeds } from '../bridge/spawner';
 import type { Vec3 } from '../color';
 import type { Cell } from '../life/engine';
-import { paletteColors } from '../life/palette';
+import type { ColoredCell } from '../life/world';
+import { colorFor, paletteColors } from '../life/palette';
 import { LifeWorld } from '../life/world';
 import type { FoodSeed } from '../physarum/layout';
 import { PhysarumSim } from '../physarum/simulation';
@@ -45,6 +47,9 @@ export class App {
   private ghost: Cell[] = [];
   private ghostDirty = true;
   private recorder: MovieRecorder | null = null;
+  // The uploaded seed image, and the average image color under each Life cell.
+  private image: SeedImage | null = null;
+  private imageCells: Vec3[] = [];
   private readonly recordingLifeTicker = new StepTicker();
 
   constructor(
@@ -92,7 +97,7 @@ export class App {
   // Wall-clock pacing: Life and Physarum each follow their own clock.
   private liveFrame(dtMs: number): void {
     this.lifeClock.hz = this.settings.lifeHz;
-    if (this.settings.playing) {
+    if (this.settings.playing && this.lifeRuns()) {
       for (let n = this.lifeClock.advance(dtMs); n > 0; n--) this.lifeTick();
     } else {
       this.lifeClock.reset();
@@ -107,7 +112,7 @@ export class App {
     const recorder = this.recorder!;
     let steps = this.physClock.advance(dtMs);
     for (; steps > 0 && !recorder.busy; steps--) {
-      if (this.settings.playing && this.recordingLifeTicker.step(this.stepsPerLifeTick())) this.lifeTick();
+      if (this.settings.playing && this.lifeRuns() && this.recordingLifeTicker.step(this.stepsPerLifeTick())) this.lifeTick();
       this.physStep();
       this.refreshCellTextures();
       try {
@@ -130,18 +135,59 @@ export class App {
     return Math.max(1, Math.round(PHYSARUM_HZ / this.settings.lifeHz));
   }
 
+  // Life stands still in image mode, where the field is populated once from
+  // the image; in life and hybrid modes it feeds the field.
+  private lifeRuns(): boolean {
+    return this.settings.seedSource !== 'image';
+  }
+
   // One Life generation; queues its spawns and food for the next Physarum steps.
   lifeTick(): void {
+    if (!this.lifeRuns()) return;
     const result = this.world.tick();
+    const colorOf = (cell: ColoredCell) => this.cellColor(cell);
     const actors = birthsToActors(
       result.births,
-      { actorsPerBirth: this.settings.actorsPerBirth, cellSize: cellSizeFor(this.settings.lifeSize), minSpeed: this.sim.params.minSpeed, life: this.sim.params.life, colors: this.colors() },
+      { actorsPerBirth: this.settings.actorsPerBirth, cellSize: cellSizeFor(this.settings.lifeSize), minSpeed: this.sim.params.minSpeed, life: this.sim.params.life, colorOf },
       this.rng,
       this.settings.poolSize,
     );
     this.scheduler.enqueue(actors, this.stepsPerLifeTick());
-    this.pendingSeeds = this.pendingSeeds.concat(deathsToFoodSeeds(result.deaths, this.colors()));
+    this.pendingSeeds = this.pendingSeeds.concat(deathsToFoodSeeds(result.deaths, colorOf));
     this.lifeDirty = true;
+  }
+
+  // The seed color for actors and food from a Life cell: in hybrid mode the
+  // image color under the cell (snapped to the palette if asked), otherwise
+  // its organism's color.
+  private cellColor(cell: ColoredCell): Vec3 {
+    if (this.settings.seedSource === 'hybrid' && this.image) {
+      const rgb = this.imageCells[cell.y * this.settings.lifeSize + cell.x];
+      return this.settings.imageColorMode === 'palette' ? nearestColor(rgb, this.colors()) : rgb;
+    }
+    return colorFor(this.colors(), cell.paletteIndex);
+  }
+
+  // Keeps the image for seeding and for coloring Life cells in hybrid mode.
+  loadImage(image: SeedImage): void {
+    this.image = image;
+    this.imageCells = cellColors(image, this.settings.lifeSize, FIELD_SIZE);
+  }
+
+  // Queues actors spawned from the loaded image's pixels, placed where the image sits on the field.
+  seedFromImage(): void {
+    if (!this.image) return;
+    const actors = imageToActors(
+      this.image,
+      {
+        density: this.settings.imageDensityPercent / 100, colorMode: this.settings.imageColorMode, colors: this.colors(),
+        minSpeed: this.sim.params.minSpeed, life: this.sim.params.life,
+        intensitySteepness: this.settings.imageIntensitySteepness, intensityMidpoint: this.settings.imageIntensityMidpoint,
+      },
+      this.rng,
+      this.settings.poolSize,
+    );
+    this.scheduler.enqueue(actors, this.stepsPerLifeTick());
   }
 
   editWorld(edit: (world: LifeWorld) => void): void {
@@ -161,6 +207,7 @@ export class App {
     this.world = new LifeWorld(lifeSize, lifeSize, this.rng);
     this.sim.setCellSize(cellSizeFor(lifeSize));
     this.pendingSeeds = [];
+    if (this.image) this.imageCells = cellColors(this.image, lifeSize, FIELD_SIZE);
     this.compositor.setGridSize(lifeSize);
     this.ghost = [];
     this.lifeDirty = true;

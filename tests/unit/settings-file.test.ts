@@ -25,6 +25,7 @@ describe('parseSettings', () => {
     const settings = {
       ...DEFAULT_SETTINGS, lifeOpacity: 0.3, lifeSize: 256, spawnMode: 'burst' as const, poolSize: 2 ** 16, palette: 'fairy floss', colorCount: 5,
       relief: 0.5, reliefHeight: 12, lightAngle: 1.5, lightElevation: 0.4, heightGain: 0.2, heightDecay: 0.05,
+      seedSource: 'image' as const, imageDensityPercent: 12.5, imageColorMode: 'palette' as const, imageIntensitySteepness: 6, imageIntensityMidpoint: 0.3,
     };
     const params = { ...DEFAULT_PARAMS, lookDistance: 33, wrapBounds: false, rngSeed: 5 };
     const result = parseSettings(serializeSettings(settings, params), POOL_SIZES);
@@ -33,6 +34,7 @@ describe('parseSettings', () => {
       lifeHz: settings.lifeHz, randomDensity: settings.randomDensity, actorsPerBirth: settings.actorsPerBirth,
       spawnMode: 'burst', palette: 'fairy floss', colorCount: 5, lifeOpacity: 0.3, physarumOpacity: settings.physarumOpacity, poolSize: 2 ** 16, lifeSize: 256,
       relief: 0.5, reliefHeight: 12, lightAngle: 1.5, lightElevation: 0.4, heightGain: 0.2, heightDecay: 0.05,
+      seedSource: 'image', imageDensityPercent: 12.5, imageColorMode: 'palette', imageIntensitySteepness: 6, imageIntensityMidpoint: 0.3,
     });
     expect(result.physarum).toEqual(params);
   });
@@ -57,7 +59,10 @@ describe('parseSettings', () => {
 
   it('skips values of the wrong type with a warning', () => {
     const result = parseSettings(
-      fileWith({ lifeOpacity: 'high', spawnMode: 'sometimes', palette: 'plaid' }, { wrapBounds: 1, lookDistance: null, minSpeed: Infinity }),
+      fileWith(
+        { lifeOpacity: 'high', spawnMode: 'sometimes', palette: 'plaid', seedSource: 'random', imageColorMode: 'sepia' },
+        { wrapBounds: 1, lookDistance: null, minSpeed: Infinity },
+      ),
       POOL_SIZES,
     );
     expect(result.settings).toEqual({});
@@ -66,6 +71,8 @@ describe('parseSettings', () => {
       'Skipped "lifeOpacity": expected a number.',
       'Skipped "spawnMode": expected "burst" or "trickle".',
       'Skipped "palette": expected one of rainbow, fairy floss, apple 1980s, dracula, solarized, nord, synthwave, sunset, pico-8.',
+      'Skipped "seedSource": expected "life", "image" or "hybrid".',
+      'Skipped "imageColorMode": expected "natural" or "palette".',
       'Skipped "wrapBounds": expected true or false.',
       'Skipped "lookDistance": expected a number.',
       'Skipped "minSpeed": expected a number.',

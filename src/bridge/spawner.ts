@@ -1,5 +1,4 @@
 import type { Vec3 } from '../color';
-import { colorFor } from '../life/palette';
 import type { ColoredCell } from '../life/world';
 import type { ActorRecord, FoodSeed } from '../physarum/layout';
 import { randomNonZeroU32, type Rng } from '../rng';
@@ -9,7 +8,8 @@ export interface SpawnSettings {
   cellSize: number;
   minSpeed: number;
   life: number;
-  colors: readonly Vec3[];
+  // The seed color for actors born in a cell.
+  colorOf: (cell: ColoredCell) => Vec3;
 }
 
 // Turns Life births into Physarum actors placed randomly inside each newborn
@@ -20,7 +20,7 @@ export function birthsToActors(births: ColoredCell[], settings: SpawnSettings, r
   const kept = births.slice(-Math.ceil(maxActors / settings.actorsPerBirth));
   const actors: ActorRecord[] = [];
   for (const b of kept) {
-    const [r, g, bl] = colorFor(settings.colors, b.paletteIndex);
+    const [r, g, bl] = settings.colorOf(b);
     for (let i = 0; i < settings.actorsPerBirth; i++) {
       actors.push({
         x: (b.x + rng()) * settings.cellSize,
@@ -39,9 +39,9 @@ export function birthsToActors(births: ColoredCell[], settings: SpawnSettings, r
   return actors.slice(-maxActors);
 }
 
-export function deathsToFoodSeeds(deaths: ColoredCell[], colors: readonly Vec3[]): FoodSeed[] {
+export function deathsToFoodSeeds(deaths: ColoredCell[], colorOf: (cell: ColoredCell) => Vec3): FoodSeed[] {
   return deaths.map(d => {
-    const [r, g, b] = colorFor(colors, d.paletteIndex);
+    const [r, g, b] = colorOf(d);
     return { cellX: d.x, cellY: d.y, rgb: [r, g, b] };
   });
 }
