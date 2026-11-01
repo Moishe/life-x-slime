@@ -1,6 +1,7 @@
 import './style.css';
 import { App } from './app/app';
 import { DEFAULT_SETTINGS, FIELD_SIZE, seedFromUrl, sizeFromUrl } from './app/settings';
+import type { SeedImage } from './bridge/image-seed';
 import { parseSettings, serializeSettings } from './app/settings-file';
 import { initGpu } from './gpu/device';
 import { onShaderError } from './gpu/shader';
@@ -11,6 +12,7 @@ import { buildPatternBar, type Tool } from './ui/pattern-bar';
 import { cellFromPointer, ghostCells } from './ui/placement';
 import { downloadBlob, encodePng, snapshotFilenames } from './ui/export-images';
 import { decodeImage } from './ui/import-image';
+import { openWebcam, webcamErrorText } from './ui/webcam';
 import { createReadouts } from './ui/readouts';
 import { chooseMovieConfig, movieFilename, movieNotice, recordingStatus } from './record/movie-config';
 import { canEncodeVideo } from 'mediabunny';
@@ -18,6 +20,7 @@ import type { Controller } from 'lil-gui';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#field')!;
 const message = document.querySelector<HTMLDivElement>('#message')!;
+const stage = document.querySelector<HTMLDivElement>('#stage')!;
 
 // Shows a message over the canvas. Fatal problems offer Reload; recoverable
 // ones (like a bad settings file) offer Close.
@@ -139,18 +142,35 @@ function loadSettingsFile(app: App, poolSizes: number[], onApplied: () => void):
   });
 }
 
-// Asks for an image file and loads it. In hybrid mode the image just becomes
-// the color source for Life; otherwise this switches to image seeding and
-// seeds the field from it once. Calls `onApplied` so the panel can refresh.
+// Loads a seed image. In hybrid mode the image just becomes the color source
+// for Life; otherwise this switches to image seeding and seeds the field from
+// it once. Calls `onApplied` so the panel can refresh.
+function applyImage(app: App, image: SeedImage, onApplied: () => void): void {
+  app.loadImage(image);
+  if (app.settings.seedSource !== 'hybrid') {
+    app.settings.seedSource = 'image';
+    app.seedFromImage();
+  }
+  onApplied();
+}
+
+// Asks for an image file and applies it as the seed image.
 function loadImageFile(app: App, onApplied: () => void): void {
-  pickFile('image/*', async file => {
-    app.loadImage(await decodeImage(file, FIELD_SIZE));
-    if (app.settings.seedSource !== 'hybrid') {
-      app.settings.seedSource = 'image';
-      app.seedFromImage();
-    }
-    onApplied();
-  });
+  pickFile('image/*', async file => applyImage(app, await decodeImage(file, FIELD_SIZE), onApplied));
+}
+
+// Shows the webcam preview over the field and applies the captured frame as the seed image.
+async function captureWebcamImage(app: App, onApplied: () => void): Promise<void> {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showMessage('This browser cannot use a camera.', 'close');
+    return;
+  }
+  try {
+    const image = await openWebcam(stage, () => navigator.mediaDevices.getUserMedia({ video: true }), FIELD_SIZE);
+    if (image) applyImage(app, image, onApplied);
+  } catch (error) {
+    showMessage(webcamErrorText(error), 'close');
+  }
 }
 
 // Keeps the canvas backing store matched to its on-screen size (max 2048).
@@ -184,6 +204,7 @@ function attachUi(app: App, poolSizes: number[]): void {
     endRecording: () => void movie.end(),
     loadSettings: () => loadSettingsFile(app, poolSizes, refreshPanel),
     chooseImage: () => loadImageFile(app, refreshPanel),
+    useWebcam: () => void captureWebcamImage(app, refreshPanel),
   });
   const refreshPanel = () => gui.controllersRecursive().forEach(c => c.updateDisplay());
 

@@ -9,6 +9,7 @@ export interface PanelActions {
   clear(): void;
   randomFill(): void;
   chooseImage(): void;
+  useWebcam(): void;
   clearTrail(): void;
   clearFood(): void;
   clearActors(): void;
@@ -48,6 +49,7 @@ export function buildPanel(settings: AppSettings, params: PhysarumParams, poolSi
   const source = seed.add(settings, 'seedSource', ['life', 'image', 'hybrid']).name('seed source');
   source.domElement.dataset.testid = 'seed-source';
   seed.add(actions, 'chooseImage').name('choose image');
+  seed.add(actions, 'useWebcam').name('use webcam');
   seed.add(settings, 'imageDensityPercent', 0, 100, 0.1).name('seed density (%)');
   seed.add(settings, 'imageColorMode', ['natural', 'palette']).name('image colors');
   seed.add(settings, 'imageIntensitySteepness', 0, 20, 0.1).name('intensity steepness');

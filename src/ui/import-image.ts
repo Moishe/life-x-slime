@@ -1,11 +1,12 @@
 import { fitImage, type SeedImage } from '../bridge/image-seed';
 
-// Decodes an image file and scales it to its fit on the field (longer side =
-// fieldSize). Transparent areas land on black. Throws if the file is not an image.
-export async function decodeImage(file: Blob, fieldSize: number): Promise<SeedImage> {
+// Decodes an image source (a file, or a video element showing a frame) and
+// scales it to its fit on the field (longer side = fieldSize). Transparent
+// areas land on black. Throws if the source is not an image the browser can read.
+export async function decodeImage(source: Blob | HTMLVideoElement, fieldSize: number): Promise<SeedImage> {
   let bitmap: ImageBitmap;
   try {
-    bitmap = await createImageBitmap(file);
+    bitmap = await createImageBitmap(source);
   } catch {
     throw new Error('This file is not an image the browser can read.');
   }
