@@ -10,10 +10,11 @@ const fileWith = (settings: object, physarum: object, version = SETTINGS_FILE_VE
 
 describe('serializeSettings', () => {
   it('writes versioned JSON with every panel value but no moment-to-moment state', () => {
-    const data = JSON.parse(serializeSettings({ ...DEFAULT_SETTINGS, playing: false, foodView: true }, DEFAULT_PARAMS));
+    const data = JSON.parse(serializeSettings({ ...DEFAULT_SETTINGS, playing: false, paused: true, foodView: true }, DEFAULT_PARAMS));
     expect(data.version).toBe(SETTINGS_FILE_VERSION);
-    const { playing, foodView, ...persisted } = DEFAULT_SETTINGS;
+    const { playing, paused, foodView, ...persisted } = DEFAULT_SETTINGS;
     void playing;
+    void paused;
     void foodView;
     expect(data.settings).toEqual(persisted);
     expect(data.physarum).toEqual(DEFAULT_PARAMS);
@@ -47,11 +48,12 @@ describe('parseSettings', () => {
   });
 
   it('ignores unknown keys with a warning', () => {
-    const result = parseSettings(fileWith({ playing: false, colour: 'red' }, { warpFactor: 9 }), POOL_SIZES);
+    const result = parseSettings(fileWith({ playing: false, paused: true, colour: 'red' }, { warpFactor: 9 }), POOL_SIZES);
     expect(result.settings).toEqual({});
     expect(result.physarum).toEqual({});
     expect(result.warnings).toEqual([
       'Ignored unknown setting "playing".',
+      'Ignored unknown setting "paused".',
       'Ignored unknown setting "colour".',
       'Ignored unknown setting "warpFactor".',
     ]);

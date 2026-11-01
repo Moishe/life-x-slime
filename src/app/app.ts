@@ -71,7 +71,8 @@ export class App {
   }
 
   frame(dtMs: number): void {
-    if (this.recorder) this.recordingFrame(dtMs);
+    if (this.settings.paused) this.holdFrame();
+    else if (this.recorder) this.recordingFrame(dtMs);
     else this.liveFrame(dtMs);
     this.render();
     this.stats.frames.add();
@@ -92,6 +93,13 @@ export class App {
     this.lifeClock.reset();
     this.physClock.reset();
     return recorder.finish();
+  }
+
+  // Paused: nothing advances, and the clocks forget the time so resuming
+  // does not catch up on it.
+  private holdFrame(): void {
+    this.lifeClock.reset();
+    this.physClock.reset();
   }
 
   // Wall-clock pacing: Life and Physarum each follow their own clock.

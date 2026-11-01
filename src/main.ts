@@ -252,6 +252,10 @@ function attachUi(app: App, poolSizes: number[]): void {
     } else if (key === 't') {
       app.settings.foodView = !app.settings.foodView;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
+    } else if (key === ' ') {
+      e.preventDefault(); // keep the page from scrolling or pressing a focused button
+      app.settings.paused = !app.settings.paused;
+      gui.controllersRecursive().forEach(c => c.updateDisplay());
     }
     // Capture phase: lil-gui stops keydown propagation from inside the panel.
   }, true);

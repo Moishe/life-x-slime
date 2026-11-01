@@ -94,6 +94,34 @@ async function tickAndDeposit(app: App): Promise<Uint8Array> {
   return readTexture(await getDevice(), app.sim.trail, FIELD_SIZE, FIELD_SIZE);
 }
 
+describe('App pause', () => {
+  it('advances neither Life nor Physarum while paused, and both again afterwards', async () => {
+    const app = await makeApp();
+    app.editWorld(w => w.randomFill(0.3));
+    const before = app.world.liveCells();
+    app.settings.paused = true;
+    app.stats.physSteps.sample(0);
+    app.frame(500);
+    expect(app.world.liveCells()).toEqual(before);
+    expect(app.stats.physSteps.sample(1000)).toBe(0);
+    app.settings.paused = false;
+    app.frame(500);
+    expect(app.world.liveCells()).not.toEqual(before);
+    expect(app.stats.physSteps.sample(2000)).toBeGreaterThan(0);
+  });
+
+  it('runs no Physarum steps while paused and does not catch them up afterwards', async () => {
+    const app = await makeApp();
+    app.settings.paused = true;
+    app.stats.physSteps.sample(0);
+    app.frame(3 * STEP_MS); // three steps' worth, under the clock's catch-up cap
+    expect(app.stats.physSteps.sample(1000)).toBe(0);
+    app.settings.paused = false;
+    app.frame(1);
+    expect(app.stats.physSteps.sample(2000)).toBe(0);
+  });
+});
+
 describe('App hybrid mode', () => {
   it('runs Life in hybrid mode', async () => {
     const app = await makeApp();

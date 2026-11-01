@@ -32,6 +32,7 @@ export function buildPanel(settings: AppSettings, params: PhysarumParams, poolSi
   gui.add(actions, 'saveImages').name('save images');
   gui.add(actions, 'startRecording').name('start recording');
   gui.add(actions, 'endRecording').name('end recording').disable();
+  gui.add(settings, 'paused').name('pause all (Space)');
 
   const layers = gui.addFolder('Layers');
   layers.add(settings, 'lifeOpacity', 0, 1, 0.01);

@@ -147,6 +147,28 @@ test('hotkeys are ignored while typing in a panel input', async ({ page }) => {
   await expect(foodView).toBeChecked();
 });
 
+test('Space pauses both Life and Physarum and resumes them', async ({ page }) => {
+  await page.goto('/?seed=7&size=128');
+  await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+  await page.getByRole('button', { name: 'random fill' }).click();
+  await page.locator('body').click({ position: { x: 5, y: 5 } }); // move focus off the panel button
+  const steps = page.getByTestId('readout-steps');
+  const organisms = page.getByTestId('readout-organisms');
+  await expect.poll(async () => Number(await steps.textContent())).toBeGreaterThan(0);
+  await expect.poll(async () => Number(await organisms.textContent())).toBeGreaterThan(0);
+
+  await page.keyboard.press('Space');
+  await expect.poll(async () => Number(await steps.textContent())).toBe(0);
+  const pausedOrganisms = await organisms.textContent();
+  await page.waitForTimeout(600);
+  expect(await steps.textContent()).toBe('0');
+  expect(await organisms.textContent()).toBe(pausedOrganisms);
+
+  await page.keyboard.press('Space');
+  await expect.poll(async () => Number(await steps.textContent())).toBeGreaterThan(0);
+  await expect.poll(async () => await organisms.textContent()).not.toBe(pausedOrganisms);
+});
+
 test('changing the board size clears the board and rescales placement', async ({ page }) => {
   await boot(page, 128);
   await page.getByRole('button', { name: 'Glider', exact: true }).click();

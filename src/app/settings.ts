@@ -12,7 +12,10 @@ export const PHYSARUM_HZ = 30;
 export type SeedSource = 'life' | 'image' | 'hybrid';
 
 export interface AppSettings {
+  // Whether Life ticks on its own; Physarum keeps running regardless.
   playing: boolean;
+  // Freezes both Life and Physarum.
+  paused: boolean;
   lifeHz: number;
   randomDensity: number;
   actorsPerBirth: number;
@@ -42,6 +45,7 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   playing: true,
+  paused: false,
   lifeHz: 7.5,
   randomDensity: 0.2,
   actorsPerBirth: 129,
