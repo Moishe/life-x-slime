@@ -55,18 +55,19 @@ export interface ImageSeedSettings {
 
 // Spawns one actor per chosen pixel, placed randomly inside that pixel on the
 // field and carrying the pixel's color (or its nearest palette color) as seed.
-// Pixels are chosen at random without repeats, capped at maxActors. With no
-// intensity weighting exactly round(density x pixels) are chosen, uniformly;
-// with weighting each pixel's chance is scaled by its weight relative to the
+// Pixels are chosen at random without repeats, capped at maxActors, from the
+// candidates (every pixel, or those `candidates` marks with 1). With no
+// intensity weighting exactly round(density x candidates) are chosen, uniformly;
+// with weighting each candidate's chance is scaled by its weight relative to the
 // mean weight, so about the same number are chosen but brighter pixels more often.
-export function imageToActors(image: SeedImage, settings: ImageSeedSettings, rng: Rng, maxActors: number): ActorRecord[] {
+export function imageToActors(image: SeedImage, settings: ImageSeedSettings, rng: Rng, maxActors: number, candidates?: Uint8Array): ActorRecord[] {
   const { width, height, offsetX, offsetY } = image.fit;
-  const pixelCount = width * height;
-  const count = Math.min(Math.round(settings.density * pixelCount), maxActors, pixelCount);
+  const indices = candidateIndices(width * height, candidates);
+  const count = Math.min(Math.round(settings.density * indices.length), maxActors, indices.length);
   if (count <= 0) return [];
   const chosen = settings.intensitySteepness > 0
-    ? chooseWeightedPixels(intensityWeights(image.pixels, settings.intensitySteepness, settings.intensityMidpoint), settings.density, rng, maxActors)
-    : choosePixels(pixelCount, count, rng);
+    ? chooseWeightedPixels(indices, intensityWeights(image.pixels, settings.intensitySteepness, settings.intensityMidpoint), settings.density, rng, maxActors)
+    : randomSubset(indices, count, rng);
   const actors: ActorRecord[] = [];
   for (const index of chosen) {
     const p = index * 4;
@@ -88,25 +89,42 @@ export function imageToActors(image: SeedImage, settings: ImageSeedSettings, rng
   return actors;
 }
 
-// `count` distinct indices in [0, total).
-function choosePixels(total: number, count: number, rng: Rng): Uint32Array {
+// The pixel indices in [0, total) that `candidates` marks with 1, or all of them.
+function candidateIndices(total: number, candidates?: Uint8Array): Uint32Array {
   const indices = new Uint32Array(total);
-  for (let i = 0; i < total; i++) indices[i] = i;
-  return randomSubset(indices, count, rng);
+  let n = 0;
+  for (let i = 0; i < total; i++) {
+    if (!candidates || candidates[i]) indices[n++] = i;
+  }
+  return indices.subarray(0, n);
 }
 
-// Each pixel independently with chance density x weight / mean weight (at
-// most 1), then at most maxActors of those, chosen at random.
-function chooseWeightedPixels(weights: Float32Array, density: number, rng: Rng, maxActors: number): Uint32Array {
+// Each candidate independently with chance density x weight / mean candidate
+// weight (at most 1), then at most maxActors of those, chosen at random.
+function chooseWeightedPixels(candidates: Uint32Array, weights: Float32Array, density: number, rng: Rng, maxActors: number): Uint32Array {
   let sum = 0;
-  for (const w of weights) sum += w;
-  const scale = density / (sum / weights.length);
-  const chosen = new Uint32Array(weights.length);
+  for (const i of candidates) sum += weights[i];
+  const scale = density / (sum / candidates.length);
+  const chosen = new Uint32Array(candidates.length);
   let n = 0;
-  for (let i = 0; i < weights.length; i++) {
+  for (const i of candidates) {
     if (rng() < weights[i] * scale) chosen[n++] = i;
   }
   return randomSubset(chosen.subarray(0, n), Math.min(n, maxActors), rng);
+}
+
+// Marks with 1 each pixel whose mean absolute RGB difference between the two
+// images, as a fraction of 255, exceeds `threshold`. Both are RGBA of equal size.
+export function changedPixels(previous: Uint8ClampedArray, current: Uint8ClampedArray, threshold: number): Uint8Array {
+  const count = current.length / 4;
+  const mask = new Uint8Array(count);
+  const limit = threshold * 255 * 3;
+  for (let i = 0; i < count; i++) {
+    const p = i * 4;
+    const difference = Math.abs(current[p] - previous[p]) + Math.abs(current[p + 1] - previous[p + 1]) + Math.abs(current[p + 2] - previous[p + 2]);
+    mask[i] = difference > limit ? 1 : 0;
+  }
+  return mask;
 }
 
 // The first `count` entries after a partial Fisher-Yates shuffle, in place.

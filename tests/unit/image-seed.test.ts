@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cellColors, fitImage, imageToActors, intensityWeights, nearestColor, type ImageSeedSettings, type SeedImage } from '../../src/bridge/image-seed';
+import { cellColors, changedPixels, fitImage, imageToActors, intensityWeights, nearestColor, type ImageSeedSettings, type SeedImage } from '../../src/bridge/image-seed';
 import { mulberry32 } from '../../src/rng';
 import { hsv2rgb, type Vec3 } from '../../src/color';
 
@@ -218,5 +218,60 @@ describe('imageToActors with intensity weighting', () => {
   it('still caps at maxActors', () => {
     const image = blackWhiteImage(64);
     expect(imageToActors(image, { ...seedSettings, density: 0.5, intensitySteepness: 20 }, mulberry32(3), 7)).toHaveLength(7);
+  });
+});
+
+describe('changedPixels', () => {
+  const previous = new Uint8ClampedArray([100, 100, 100, 255, 100, 100, 100, 255, 100, 100, 100, 255]);
+  const current = new Uint8ClampedArray([100, 100, 100, 255, 130, 100, 100, 255, 200, 200, 200, 255]);
+
+  it('marks the pixels whose mean RGB difference exceeds the threshold', () => {
+    expect(Array.from(changedPixels(previous, current, 0.1))).toEqual([0, 0, 1]);
+    expect(Array.from(changedPixels(previous, current, 0.02))).toEqual([0, 1, 1]);
+  });
+
+  it('at threshold 0 marks any pixel that differs at all', () => {
+    expect(Array.from(changedPixels(previous, current, 0))).toEqual([0, 1, 1]);
+  });
+
+  it('marks nothing when the images are identical', () => {
+    expect(Array.from(changedPixels(current, current, 0))).toEqual([0, 0, 0]);
+  });
+});
+
+// Eligible pixels of a fitted image: those on its left half.
+const leftHalfMask = (image: SeedImage): Uint8Array => {
+  const mask = new Uint8Array(image.fit.width * image.fit.height);
+  for (let i = 0; i < mask.length; i++) mask[i] = i % image.fit.width < image.fit.width / 2 ? 1 : 0;
+  return mask;
+};
+const onLeftHalf = (image: SeedImage) => (a: { x: number }) => a.x < image.fit.width / 2;
+
+describe('imageToActors restricted to candidate pixels', () => {
+  it('spawns only inside the candidate pixels, at the density of the candidates', () => {
+    const image = solidImage(10, 10, [255, 255, 255, 255], 10);
+    const actors = imageToActors(image, { ...seedSettings, density: 0.4 }, mulberry32(2), 1000, leftHalfMask(image));
+    expect(actors).toHaveLength(20); // 40% of the 50 candidate pixels
+    expect(actors.filter(onLeftHalf(image))).toHaveLength(20);
+    expect(new Set(actors.map(a => `${Math.floor(a.x)},${Math.floor(a.y)}`)).size).toBe(20);
+  });
+
+  it('spawns nothing when no pixel is a candidate', () => {
+    const image = solidImage(10, 10, [255, 255, 255, 255], 10);
+    expect(imageToActors(image, seedSettings, mulberry32(2), 1000, new Uint8Array(100))).toEqual([]);
+  });
+
+  it('with intensity weighting keeps to the candidates and to their share', () => {
+    const image = blackWhiteImage(64); // 64x32 at y offset 16: left half black, right half white
+    const { width, offsetX, offsetY } = image.fit;
+    const mask = new Uint8Array(width * image.fit.height);
+    for (let i = 0; i < mask.length; i++) mask[i] = i % 4 < 2 ? 1 : 0; // every other pair of columns, in both halves
+    const eligible = mask.length / 2;
+    const actors = imageToActors(image, { ...seedSettings, density: 0.25, intensitySteepness: 2 }, mulberry32(3), 100000, mask);
+    for (const a of actors) expect(mask[(Math.floor(a.y) - offsetY) * width + (Math.floor(a.x) - offsetX)]).toBe(1);
+    expect(actors.length).toBeGreaterThan(eligible * 0.25 * 0.85);
+    expect(actors.length).toBeLessThan(eligible * 0.25 * 1.15);
+    const bright = actors.filter(onBrightHalf(image)).length;
+    expect(bright).toBeGreaterThan((actors.length - bright) * 1.5);
   });
 });

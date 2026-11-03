@@ -94,6 +94,54 @@ async function tickAndDeposit(app: App): Promise<Uint8Array> {
   return readTexture(await getDevice(), app.sim.trail, FIELD_SIZE, FIELD_SIZE);
 }
 
+// A width x height source image fitted to the field whose left half is one color and right half another.
+function halvesImage(width: number, height: number, left: number[], right: number[]): SeedImage {
+  const fit = fitImage(width, height, FIELD_SIZE);
+  const pixels = new Uint8ClampedArray(fit.width * fit.height * 4);
+  for (let i = 0; i < fit.width * fit.height; i++) pixels.set(i % fit.width < fit.width / 2 ? left : right, i * 4);
+  return { pixels, fit };
+}
+
+describe('App seeding only what changed', () => {
+  it('seeds nothing from the first image and then only the pixels that changed', async () => {
+    const app = await makeApp();
+    app.settings.seedSource = 'image';
+    app.settings.spawnMode = 'burst';
+    app.settings.imageDensityPercent = 0.01;
+    app.settings.seedChangesOnly = true;
+    app.loadImage(solidImage(4, 4, [255, 0, 0, 255]));
+    app.seedFromImage();
+    app.frame(STEP_MS);
+    app.frame(STEP_MS);
+    await app.pollCounters();
+    expect(app.alive).toBe(0);
+
+    app.loadImage(halvesImage(4, 4, [0, 0, 255, 255], [255, 0, 0, 255])); // only the left half changed
+    app.seedFromImage();
+    app.frame(STEP_MS);
+    app.frame(STEP_MS);
+    await app.pollCounters();
+    expect(app.alive).toBe(Math.round(0.0001 * FIELD_SIZE * FIELD_SIZE / 2));
+  });
+
+  it('ignores changes below the threshold', async () => {
+    const app = await makeApp();
+    app.settings.seedSource = 'image';
+    app.settings.spawnMode = 'burst';
+    app.settings.imageDensityPercent = 0.01;
+    app.settings.seedChangesOnly = true;
+    app.settings.changeThreshold = 0.5;
+    app.loadImage(solidImage(4, 4, [100, 100, 100, 255]));
+    app.seedFromImage();
+    app.loadImage(solidImage(4, 4, [150, 150, 150, 255])); // a 0.2 change
+    app.seedFromImage();
+    app.frame(STEP_MS);
+    app.frame(STEP_MS);
+    await app.pollCounters();
+    expect(app.alive).toBe(0);
+  });
+});
+
 describe('App pause', () => {
   it('advances neither Life nor Physarum while paused, and both again afterwards', async () => {
     const app = await makeApp();

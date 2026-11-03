@@ -28,7 +28,7 @@ describe('parseSettings', () => {
       ...DEFAULT_SETTINGS, lifeOpacity: 0.3, lifeSize: 256, spawnMode: 'burst' as const, poolSize: 2 ** 16, palette: 'fairy floss', colorCount: 5,
       relief: 0.5, reliefHeight: 12, lightAngle: 1.5, lightElevation: 0.4, heightGain: 0.2, heightDecay: 0.05,
       seedSource: 'image' as const, imageDensityPercent: 12.5, imageColorMode: 'palette' as const, imageIntensitySteepness: 6, imageIntensityMidpoint: 0.3,
-      webcamIntervalSec: 2.5,
+      webcamIntervalSec: 2.5, seedChangesOnly: true, changeThreshold: 0.3,
     };
     const params = { ...DEFAULT_PARAMS, lookDistance: 33, wrapBounds: false, rngSeed: 5 };
     const result = parseSettings(serializeSettings(settings, params), POOL_SIZES);
@@ -38,7 +38,7 @@ describe('parseSettings', () => {
       spawnMode: 'burst', palette: 'fairy floss', colorCount: 5, lifeOpacity: 0.3, physarumOpacity: settings.physarumOpacity, poolSize: 2 ** 16, lifeSize: 256,
       relief: 0.5, reliefHeight: 12, lightAngle: 1.5, lightElevation: 0.4, heightGain: 0.2, heightDecay: 0.05,
       seedSource: 'image', imageDensityPercent: 12.5, imageColorMode: 'palette', imageIntensitySteepness: 6, imageIntensityMidpoint: 0.3,
-      webcamIntervalSec: 2.5,
+      webcamIntervalSec: 2.5, seedChangesOnly: true, changeThreshold: 0.3,
     });
     expect(result.physarum).toEqual(params);
   });

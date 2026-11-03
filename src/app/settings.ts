@@ -47,6 +47,10 @@ export interface AppSettings {
   // Whether the webcam is open and seeding the field with a fresh frame every webcamIntervalSec.
   autoCapture: boolean;
   webcamIntervalSec: number;
+  // Seed only from pixels that changed since the previous image by more than
+  // changeThreshold (mean RGB difference as a fraction of full scale).
+  seedChangesOnly: boolean;
+  changeThreshold: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -76,6 +80,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   imageIntensityMidpoint: 0.5,
   autoCapture: false,
   webcamIntervalSec: 5,
+  seedChangesOnly: false,
+  changeThreshold: 0.1,
 };
 
 // Width of one Life cell's block on the Physarum field, in field pixels.

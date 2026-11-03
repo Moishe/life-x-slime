@@ -90,3 +90,25 @@ test('the capture interval slider runs logarithmically from 24 fps to every 5 se
   await dragIntervalTo(page, 1);
   await expect(label).toHaveText('capture every 5 s');
 });
+
+test('with seed changes only on, a capture seeds just what changed since the previous one', async ({ page }) => {
+  await page.goto('/?seed=7&size=128');
+  await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+  await page.locator('.lil-controller', { hasText: 'seed changes only' }).locator('input[type="checkbox"]').click();
+  const alive = page.getByTestId('readout-alive');
+
+  await page.getByRole('button', { name: 'use webcam' }).click();
+  await expect(page.getByRole('button', { name: 'capture' })).toBeEnabled();
+  await page.getByRole('button', { name: 'capture' }).click();
+  await expect(page.locator('#webcam')).toHaveCount(0);
+  await expect(page.getByTestId('seed-source').locator('select')).toHaveValue('image');
+  await page.waitForTimeout(1000);
+  await expect(alive).toHaveText('0'); // nothing to compare the first capture with
+
+  await page.getByRole('button', { name: 'use webcam' }).click();
+  await expect(page.getByRole('button', { name: 'capture' })).toBeEnabled();
+  await page.waitForTimeout(500); // let the fake camera's pattern move on
+  await page.getByRole('button', { name: 'capture' }).click();
+  await expect.poll(async () => Number(await alive.textContent()), { timeout: 5000 }).toBeGreaterThan(0);
+  await expect(page.locator('#message')).toBeHidden();
+});

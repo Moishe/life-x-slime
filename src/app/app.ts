@@ -1,7 +1,7 @@
 import { FixedStepClock, StepTicker } from './clock';
 import { RateMeter } from './rates';
 import { DEFAULT_SETTINGS, FIELD_SIZE, PHYSARUM_HZ, cellSizeFor, type AppSettings } from './settings';
-import { cellColors, imageToActors, nearestColor, type SeedImage } from '../bridge/image-seed';
+import { cellColors, changedPixels, imageToActors, nearestColor, type SeedImage } from '../bridge/image-seed';
 import { SpawnScheduler, birthsToActors, deathsToFoodSeeds } from '../bridge/spawner';
 import type { Vec3 } from '../color';
 import type { Cell } from '../life/engine';
@@ -50,6 +50,8 @@ export class App {
   // The uploaded seed image, and the average image color under each Life cell.
   private image: SeedImage | null = null;
   private imageCells: Vec3[] = [];
+  // The image loaded before the current one, for seeding only what changed.
+  private previousImage: SeedImage | null = null;
   private readonly recordingLifeTicker = new StepTicker();
 
   constructor(
@@ -178,13 +180,23 @@ export class App {
 
   // Keeps the image for seeding and for coloring Life cells in hybrid mode.
   loadImage(image: SeedImage): void {
+    this.previousImage = this.image;
     this.image = image;
     this.imageCells = cellColors(image, this.settings.lifeSize, FIELD_SIZE);
   }
 
-  // Queues actors spawned from the loaded image's pixels, placed where the image sits on the field.
+  // Queues actors spawned from the loaded image's pixels, placed where the image
+  // sits on the field. With seedChangesOnly, only pixels that changed from the
+  // previous image count, so the first image (or one of a different size) seeds nothing.
   seedFromImage(): void {
     if (!this.image) return;
+    let candidates: Uint8Array | undefined;
+    if (this.settings.seedChangesOnly) {
+      const previous = this.previousImage;
+      const sameSize = previous && previous.fit.width === this.image.fit.width && previous.fit.height === this.image.fit.height;
+      if (!sameSize) return;
+      candidates = changedPixels(previous.pixels, this.image.pixels, this.settings.changeThreshold);
+    }
     const actors = imageToActors(
       this.image,
       {
@@ -194,6 +206,7 @@ export class App {
       },
       this.rng,
       this.settings.poolSize,
+      candidates,
     );
     this.scheduler.enqueue(actors, this.stepsPerLifeTick());
   }

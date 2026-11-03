@@ -9,7 +9,7 @@ describe('settings', () => {
       lifeOpacity: 0.05, physarumOpacity: 1, foodView: false, poolSize: 1048576, lifeSize: 64,
       relief: 0, reliefHeight: 8, lightAngle: 0.8, lightElevation: 0.7, heightGain: 0.1, heightDecay: 0.02,
       seedSource: 'life', imageDensityPercent: 5, imageColorMode: 'natural', imageIntensitySteepness: 0, imageIntensityMidpoint: 0.5,
-      autoCapture: false, webcamIntervalSec: 5,
+      autoCapture: false, webcamIntervalSec: 5, seedChangesOnly: false, changeThreshold: 0.1,
     });
   });
 

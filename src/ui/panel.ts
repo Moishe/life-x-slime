@@ -77,6 +77,8 @@ export function buildPanel(settings: AppSettings, params: PhysarumParams, poolSi
   seed.add(actions, 'useWebcam').name('use webcam');
   seed.add(settings, 'autoCapture').name('auto capture (W)').onChange(actions.autoCaptureChanged);
   addIntervalSlider(seed, settings);
+  seed.add(settings, 'seedChangesOnly').name('seed changes only');
+  seed.add(settings, 'changeThreshold', 0, 1, 0.01).name('change threshold');
   seed.add(settings, 'imageDensityPercent', 0, 100, 0.1).name('seed density (%)');
   seed.add(settings, 'imageColorMode', ['natural', 'palette']).name('image colors');
   seed.add(settings, 'imageIntensitySteepness', 0, 20, 0.1).name('intensity steepness');
