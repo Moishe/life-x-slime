@@ -10,11 +10,12 @@ const fileWith = (settings: object, physarum: object, version = SETTINGS_FILE_VE
 
 describe('serializeSettings', () => {
   it('writes versioned JSON with every panel value but no moment-to-moment state', () => {
-    const data = JSON.parse(serializeSettings({ ...DEFAULT_SETTINGS, playing: false, paused: true, foodView: true }, DEFAULT_PARAMS));
+    const data = JSON.parse(serializeSettings({ ...DEFAULT_SETTINGS, playing: false, paused: true, autoCapture: true, foodView: true }, DEFAULT_PARAMS));
     expect(data.version).toBe(SETTINGS_FILE_VERSION);
-    const { playing, paused, foodView, ...persisted } = DEFAULT_SETTINGS;
+    const { playing, paused, autoCapture, foodView, ...persisted } = DEFAULT_SETTINGS;
     void playing;
     void paused;
+    void autoCapture;
     void foodView;
     expect(data.settings).toEqual(persisted);
     expect(data.physarum).toEqual(DEFAULT_PARAMS);
@@ -27,6 +28,7 @@ describe('parseSettings', () => {
       ...DEFAULT_SETTINGS, lifeOpacity: 0.3, lifeSize: 256, spawnMode: 'burst' as const, poolSize: 2 ** 16, palette: 'fairy floss', colorCount: 5,
       relief: 0.5, reliefHeight: 12, lightAngle: 1.5, lightElevation: 0.4, heightGain: 0.2, heightDecay: 0.05,
       seedSource: 'image' as const, imageDensityPercent: 12.5, imageColorMode: 'palette' as const, imageIntensitySteepness: 6, imageIntensityMidpoint: 0.3,
+      webcamIntervalSec: 2.5,
     };
     const params = { ...DEFAULT_PARAMS, lookDistance: 33, wrapBounds: false, rngSeed: 5 };
     const result = parseSettings(serializeSettings(settings, params), POOL_SIZES);
@@ -36,6 +38,7 @@ describe('parseSettings', () => {
       spawnMode: 'burst', palette: 'fairy floss', colorCount: 5, lifeOpacity: 0.3, physarumOpacity: settings.physarumOpacity, poolSize: 2 ** 16, lifeSize: 256,
       relief: 0.5, reliefHeight: 12, lightAngle: 1.5, lightElevation: 0.4, heightGain: 0.2, heightDecay: 0.05,
       seedSource: 'image', imageDensityPercent: 12.5, imageColorMode: 'palette', imageIntensitySteepness: 6, imageIntensityMidpoint: 0.3,
+      webcamIntervalSec: 2.5,
     });
     expect(result.physarum).toEqual(params);
   });
@@ -48,12 +51,13 @@ describe('parseSettings', () => {
   });
 
   it('ignores unknown keys with a warning', () => {
-    const result = parseSettings(fileWith({ playing: false, paused: true, colour: 'red' }, { warpFactor: 9 }), POOL_SIZES);
+    const result = parseSettings(fileWith({ playing: false, paused: true, autoCapture: true, colour: 'red' }, { warpFactor: 9 }), POOL_SIZES);
     expect(result.settings).toEqual({});
     expect(result.physarum).toEqual({});
     expect(result.warnings).toEqual([
       'Ignored unknown setting "playing".',
       'Ignored unknown setting "paused".',
+      'Ignored unknown setting "autoCapture".',
       'Ignored unknown setting "colour".',
       'Ignored unknown setting "warpFactor".',
     ]);

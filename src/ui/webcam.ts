@@ -40,6 +40,57 @@ export async function openWebcam(parent: HTMLElement, getStream: () => Promise<M
   }
 }
 
+// Opens the camera via `getStream` and, without showing it, hands `onFrame` a
+// frame fitted to the field right away and then every `intervalSec()` seconds
+// (read before each wait, so changes take effect at the next capture).
+// Resolves with a function that stops capturing and releases the camera;
+// rejects if the camera cannot be opened. If a frame cannot be captured or
+// `onFrame` throws, capturing stops and `onError` gets the error.
+export async function startAutoCapture(
+  getStream: () => Promise<MediaStream>,
+  fieldSize: number,
+  intervalSec: () => number,
+  onFrame: (image: SeedImage) => void,
+  onError: (error: unknown) => void,
+): Promise<() => void> {
+  const stream = await getStream();
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.srcObject = stream;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let stopped = false;
+  const stop = () => {
+    stopped = true;
+    if (timer !== null) clearTimeout(timer);
+    stream.getTracks().forEach(track => track.stop());
+    video.srcObject = null;
+  };
+  // Once stopped, a decode or playback failure caused by the stop (and any
+  // frame that was mid-decode) is dropped rather than reported or delivered.
+  const fail = (error: unknown) => {
+    if (stopped) return;
+    stop();
+    onError(error);
+  };
+  const capture = async () => {
+    if (stopped) return;
+    try {
+      const image = await decodeImage(video, fieldSize);
+      if (stopped) return;
+      onFrame(image);
+    } catch (error) {
+      fail(error);
+      return;
+    }
+    if (!stopped) timer = setTimeout(capture, intervalSec() * 1000);
+  };
+  // A frame can only be grabbed once playback has actually started.
+  video.addEventListener('playing', () => void capture(), { once: true });
+  video.play().catch(fail);
+  return stop;
+}
+
 // A readable explanation of a getUserMedia failure.
 export function webcamErrorText(error: unknown): string {
   const name = error instanceof Error ? error.name : '';

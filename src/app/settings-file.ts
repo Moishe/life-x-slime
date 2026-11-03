@@ -5,7 +5,7 @@ import { PALETTE_NAMES } from '../life/palette';
 export const SETTINGS_FILE_VERSION = 1;
 
 // Settings worth saving: everything in the panel except moment-to-moment state.
-export type SavedSettings = Omit<AppSettings, 'playing' | 'paused' | 'foodView'>;
+export type SavedSettings = Omit<AppSettings, 'playing' | 'paused' | 'autoCapture' | 'foodView'>;
 
 export interface LoadedSettings {
   settings: Partial<SavedSettings>;
@@ -16,9 +16,10 @@ export interface LoadedSettings {
 const NOT_A_SETTINGS_FILE = 'This file is not a Life x Physarum settings file.';
 
 export function serializeSettings(settings: AppSettings, params: PhysarumParams): string {
-  const { playing, paused, foodView, ...saved } = settings;
+  const { playing, paused, autoCapture, foodView, ...saved } = settings;
   void playing;
   void paused;
+  void autoCapture;
   void foodView;
   return JSON.stringify({ version: SETTINGS_FILE_VERSION, settings: saved, physarum: params }, null, 2);
 }
@@ -39,9 +40,10 @@ export function parseSettings(text: string, poolSizes: number[]): LoadedSettings
   }
 
   const warnings: string[] = [];
-  const { playing, paused, foodView, ...savedDefaults } = DEFAULT_SETTINGS;
+  const { playing, paused, autoCapture, foodView, ...savedDefaults } = DEFAULT_SETTINGS;
   void playing;
   void paused;
+  void autoCapture;
   void foodView;
   const settings = readSection(data.settings, savedDefaults, warnings) as Partial<SavedSettings>;
   const physarum = readSection(data.physarum, DEFAULT_PARAMS, warnings) as Partial<PhysarumParams>;

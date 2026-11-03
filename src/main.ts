@@ -12,7 +12,7 @@ import { buildPatternBar, type Tool } from './ui/pattern-bar';
 import { cellFromPointer, ghostCells } from './ui/placement';
 import { downloadBlob, encodePng, snapshotFilenames } from './ui/export-images';
 import { decodeImage } from './ui/import-image';
-import { openWebcam, webcamErrorText } from './ui/webcam';
+import { openWebcam, startAutoCapture, webcamErrorText } from './ui/webcam';
 import { createReadouts } from './ui/readouts';
 import { chooseMovieConfig, movieFilename, movieNotice, recordingStatus } from './record/movie-config';
 import { canEncodeVideo } from 'mediabunny';
@@ -166,11 +166,59 @@ async function captureWebcamImage(app: App, onApplied: () => void): Promise<void
     return;
   }
   try {
-    const image = await openWebcam(stage, () => navigator.mediaDevices.getUserMedia({ video: true }), FIELD_SIZE);
+    const image = await openWebcam(stage, cameraStream, FIELD_SIZE);
     if (image) applyImage(app, image, onApplied);
   } catch (error) {
     showMessage(webcamErrorText(error), 'close');
   }
+}
+
+const cameraStream = () => navigator.mediaDevices.getUserMedia({ video: true });
+
+// Starts and stops seeding the field from the webcam every settings.webcamIntervalSec
+// seconds, keeping settings.autoCapture (and so the panel) in step with whether
+// the camera is actually running.
+function createAutoCapture(app: App, onApplied: () => void) {
+  let stop: (() => void) | null = null;
+
+  const off = () => {
+    stop?.();
+    stop = null;
+    app.settings.autoCapture = false;
+    onApplied();
+  };
+  const fail = (error: unknown) => {
+    off();
+    showMessage(webcamErrorText(error), 'close');
+  };
+
+  return {
+    async set(on: boolean): Promise<void> {
+      if (!on) {
+        off();
+        return;
+      }
+      if (stop) return;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        off();
+        showMessage('This browser cannot use a camera.', 'close');
+        return;
+      }
+      try {
+        const started = await startAutoCapture(cameraStream, FIELD_SIZE, () => app.settings.webcamIntervalSec, image => applyImage(app, image, onApplied), fail);
+        // Switched off again while the camera was opening.
+        if (!app.settings.autoCapture) started();
+        else stop = started;
+      } catch (error) {
+        fail(error);
+      }
+    },
+    toggle(): void {
+      app.settings.autoCapture = !app.settings.autoCapture;
+      onApplied();
+      void this.set(app.settings.autoCapture);
+    },
+  };
 }
 
 // Keeps the canvas backing store matched to its on-screen size (max 2048).
@@ -205,8 +253,10 @@ function attachUi(app: App, poolSizes: number[]): void {
     loadSettings: () => loadSettingsFile(app, poolSizes, refreshPanel),
     chooseImage: () => loadImageFile(app, refreshPanel),
     useWebcam: () => void captureWebcamImage(app, refreshPanel),
+    autoCaptureChanged: on => void autoCapture.set(on),
   });
   const refreshPanel = () => gui.controllersRecursive().forEach(c => c.updateDisplay());
+  const autoCapture = createAutoCapture(app, refreshPanel);
 
   const button = (property: string) => gui.controllersRecursive().find(c => c.property === property)!;
   const movie = createMovieControls(app, button('startRecording'), button('endRecording'));
@@ -252,6 +302,8 @@ function attachUi(app: App, poolSizes: number[]): void {
     } else if (key === 't') {
       app.settings.foodView = !app.settings.foodView;
       gui.controllersRecursive().forEach(c => c.updateDisplay());
+    } else if (key === 'w') {
+      autoCapture.toggle();
     } else if (key === ' ') {
       e.preventDefault(); // keep the page from scrolling or pressing a focused button
       app.settings.paused = !app.settings.paused;

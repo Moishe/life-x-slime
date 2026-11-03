@@ -2,6 +2,7 @@ import GUI from 'lil-gui';
 import { LIFE_SIZES, type AppSettings } from '../app/settings';
 import { MAX_COLORS, PALETTE_NAMES } from '../life/palette';
 import type { PhysarumParams } from '../physarum/params';
+import { formatInterval, intervalFromPosition, positionFromInterval } from './webcam-interval';
 
 export interface PanelActions {
   playPause(): void;
@@ -10,6 +11,7 @@ export interface PanelActions {
   randomFill(): void;
   chooseImage(): void;
   useWebcam(): void;
+  autoCaptureChanged(on: boolean): void;
   clearTrail(): void;
   clearFood(): void;
   clearActors(): void;
@@ -21,6 +23,28 @@ export interface PanelActions {
   saveImages(): void;
   startRecording(): void;
   endRecording(): void;
+}
+
+// lil-gui sliders are linear, so the capture interval slider moves a position
+// in [0, 1] that maps logarithmically onto settings.webcamIntervalSec. The
+// label shows the resulting rate; the number box would show the bare position,
+// so it is hidden (see style.css).
+function addIntervalSlider(folder: GUI, settings: AppSettings): void {
+  const interval = {
+    get position() {
+      return positionFromInterval(settings.webcamIntervalSec);
+    },
+    set position(position: number) {
+      settings.webcamIntervalSec = intervalFromPosition(position);
+    },
+  };
+  const control = folder.add(interval, 'position', 0, 1, 0.001);
+  control.domElement.classList.add('log-slider');
+  control.domElement.dataset.testid = 'capture-interval';
+  // Relabel whenever the display refreshes, which covers dragging and loaded settings.
+  const updateDisplay = control.updateDisplay.bind(control);
+  control.updateDisplay = () => updateDisplay().name(`capture every ${formatInterval(settings.webcamIntervalSec)}`);
+  control.updateDisplay();
 }
 
 // The lil-gui control panel. Controls write straight into settings/params,
@@ -51,6 +75,8 @@ export function buildPanel(settings: AppSettings, params: PhysarumParams, poolSi
   source.domElement.dataset.testid = 'seed-source';
   seed.add(actions, 'chooseImage').name('choose image');
   seed.add(actions, 'useWebcam').name('use webcam');
+  seed.add(settings, 'autoCapture').name('auto capture (W)').onChange(actions.autoCaptureChanged);
+  addIntervalSlider(seed, settings);
   seed.add(settings, 'imageDensityPercent', 0, 100, 0.1).name('seed density (%)');
   seed.add(settings, 'imageColorMode', ['natural', 'palette']).name('image colors');
   seed.add(settings, 'imageIntensitySteepness', 0, 20, 0.1).name('intensity steepness');

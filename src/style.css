@@ -7,6 +7,8 @@ body { display: flex; }
    which pointer-to-cell mapping and canvas sizing read. The 8px inset keeps
    the outline inside the window when the field fills the viewport height. */
 #field { width: min(100vh - 8px, 100% - 8px); aspect-ratio: 1; display: block; cursor: crosshair; outline: 1px solid #777; }
+/* The capture interval slider's number box would show a bare 0-1 position. */
+.lil-gui .log-slider input { display: none; }
 /* The webcam preview sits over the field; its buttons line up under the video. */
 #webcam { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; background: #111; border: 1px solid #777; }
 #webcam video { max-width: 60vmin; max-height: 60vmin; display: block; }

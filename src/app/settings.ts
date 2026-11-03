@@ -6,6 +6,9 @@ export const FIELD_SIZE = 2048;
 // Life board sizes; each divides the field into whole square pixel blocks.
 export const LIFE_SIZES: readonly number[] = [64, 128, 256, 512, 1024];
 export const PHYSARUM_HZ = 30;
+// The capture interval slider runs from 24 frames per second to once every 5 seconds.
+export const WEBCAM_INTERVAL_MIN_SEC = 1 / 24;
+export const WEBCAM_INTERVAL_MAX_SEC = 5;
 
 // What populates the Physarum field: Life births, a one-time seed from an
 // uploaded image, or Life births colored by the image under each cell (hybrid).
@@ -41,6 +44,9 @@ export interface AppSettings {
   // Sigmoid weighting of image-mode spawns by pixel brightness: 0 steepness = off.
   imageIntensitySteepness: number;
   imageIntensityMidpoint: number;
+  // Whether the webcam is open and seeding the field with a fresh frame every webcamIntervalSec.
+  autoCapture: boolean;
+  webcamIntervalSec: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -68,6 +74,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   imageColorMode: 'natural',
   imageIntensitySteepness: 0,
   imageIntensityMidpoint: 0.5,
+  autoCapture: false,
+  webcamIntervalSec: 5,
 };
 
 // Width of one Life cell's block on the Physarum field, in field pixels.
